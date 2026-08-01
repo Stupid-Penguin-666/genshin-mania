@@ -1,1 +1,22 @@
-
+[
+  {
+    "id": "builtin_serenity",
+    "title": "Serenity (Demo)",
+    "artist": "Nội bộ / Tự sinh",
+    "bpm": 96,
+    "difficulty": "Dễ",
+    "duration": 48.5,
+    "audioUrl": "audio/demo-1-serenity.wav",
+    "beatmapUrl": "beatmaps/demo-1-serenity.json"
+  },
+  {
+    "id": "builtin_embers",
+    "title": "Embers (Demo)",
+    "artist": "Nội bộ / Tự sinh",
+    "bpm": 132,
+    "difficulty": "Khó",
+    "duration": 39.9,
+    "audioUrl": "audio/demo-2-embers.wav",
+    "beatmapUrl": "beatmaps/demo-2-embers.json"
+  }
+]

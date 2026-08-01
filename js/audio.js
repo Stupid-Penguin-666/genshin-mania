@@ -152,88 +152,11 @@ const AudioManager = (() => {
     return startOffset + elapsed + userOffsetSec;
   }
 
-  // Raw context clock, uncorrected — used internally by the
-  // calibration screen, which measures offset itself rather than
-  // applying it.
+  // Raw context clock, uncorrected — exposed in case future features
+  // (e.g. a live BPM tap-tempo tool) need it.
   function getRawContextTime() {
     ensureContext();
     return ctx.currentTime;
-  }
-
-  // ==================================================================
-  // CALIBRATION MODE
-  // Plays a short click sample on a fixed interval (metronome). The
-  // caller (main.js) records ctx.currentTime when the click fires and
-  // when the player presses SPACE, then feeds the deltas back here
-  // via recordTap() to compute a suggested offset.
-  // ==================================================================
-  let calibIntervalId = null;
-  let calibBeatTimes = [];   // ctx.currentTime of each click
-  let calibTapDeltas = [];   // (tapTime - nearestBeatTime) per tap, ms
-
-  function startCalibration(bpm = 100, onBeat = () => {}) {
-    ensureContext();
-    stopCalibration();
-    calibBeatTimes = [];
-    calibTapDeltas = [];
-    const intervalSec = 60 / bpm;
-
-    const clickBuffer = generateClickBuffer();
-
-    calibIntervalId = setInterval(() => {
-      const beatTime = ctx.currentTime;
-      calibBeatTimes.push(beatTime);
-      playClick(clickBuffer);
-      onBeat(beatTime);
-    }, intervalSec * 1000);
-  }
-
-  function stopCalibration() {
-    if (calibIntervalId) clearInterval(calibIntervalId);
-    calibIntervalId = null;
-  }
-
-  // Call this from the SPACE keydown handler during calibration.
-  function recordTap() {
-    if (!calibBeatTimes.length) return null;
-    const tapTime = ctx.currentTime;
-    const nearestBeat = calibBeatTimes.reduce((closest, t) =>
-      Math.abs(t - tapTime) < Math.abs(closest - tapTime) ? t : closest
-    );
-    const deltaMs = (tapTime - nearestBeat) * 1000;
-    calibTapDeltas.push(deltaMs);
-    return deltaMs;
-  }
-
-  function getSuggestedOffsetMs() {
-    if (!calibTapDeltas.length) return 0;
-    const avg = calibTapDeltas.reduce((a, b) => a + b, 0) / calibTapDeltas.length;
-    return Math.round(avg);
-  }
-
-  function getCalibTapCount() {
-    return calibTapDeltas.length;
-  }
-
-  // Tiny synthesized "tick" so calibration doesn't need an asset file.
-  function generateClickBuffer() {
-    const sr = ctx.sampleRate;
-    const durationSec = 0.05;
-    const buf = ctx.createBuffer(1, sr * durationSec, sr);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      // short decaying sine burst
-      const t = i / sr;
-      data[i] = Math.sin(2 * Math.PI * 1000 * t) * Math.exp(-t * 60);
-    }
-    return buf;
-  }
-
-  function playClick(buffer) {
-    const node = ctx.createBufferSource();
-    node.buffer = buffer;
-    node.connect(gainNode);
-    node.start();
   }
 
   // ------------------------------------------------------------------
@@ -256,12 +179,6 @@ const AudioManager = (() => {
     loadStoredOffset,
     saveOffset,
     getOffsetMs,
-
-    startCalibration,
-    stopCalibration,
-    recordTap,
-    getSuggestedOffsetMs,
-    getCalibTapCount,
   };
 })();
 

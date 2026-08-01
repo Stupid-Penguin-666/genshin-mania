@@ -3,17 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Thiên Âm Nhã Tập</title>
+<title>Genshin Mania</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+  <!-- Fixed full-viewport background image layer, set via JS (main.js)
+       from images/catalog.json. Sits behind #app; screens use a
+       translucent neutral dark overlay so it shows through regardless
+       of what image is picked (see .has-bg-image rules in style.css). -->
+  <div id="bg-layer"></div>
 
   <!-- ============================================================
        APP ROOT — every screen lives here, only one is ever visible
        (toggled via the .screen--active class from js/main.js)
        ============================================================ -->
   <div id="app">
-
     <!-- ---------------------------------------------------------
          SCREEN: MAIN MENU
          --------------------------------------------------------- -->
@@ -21,8 +26,7 @@
       <div class="bg-flame bg-flame--bottom"></div>
       <div class="menu-panel">
         <div class="brand">
-          <span class="brand__glyph">澄</span>
-          <h1 class="brand__title">Thiên Âm Nhã Tập</h1>
+          <h1 class="brand__title">Genshin Mania</h1>
           <p class="brand__subtitle">Night Harmony Suite</p>
         </div>
         <nav class="menu-nav">
@@ -45,13 +49,30 @@
       <header class="screen-header">
         <button class="icon-btn" data-action="go-mainmenu">←</button>
         <h2>Chủ Đề Nhạc Phổ</h2>
-        <label class="btn btn--small" for="song-file-input">+ Tải Nhạc (.mp3)</label>
-        <input type="file" id="song-file-input" accept="audio/mpeg,audio/mp3" hidden>
+        <button class="btn btn--small" id="btn-upload-toggle">+ Thêm Bài</button>
       </header>
+
+      <!-- Hidden by default, shown when "+ Thêm Bài" is clicked.
+           mp3 is required; beatmap.json is optional — with it, the
+           chart matches the song exactly; without it, a placeholder
+           chart is auto-generated so the upload is still playable. -->
+      <div class="upload-panel" id="upload-panel" hidden>
+        <div class="upload-row">
+          <label class="btn btn--small" for="song-file-input">Chọn File Nhạc (.mp3) *</label>
+          <input type="file" id="song-file-input" accept="audio/mpeg,audio/mp3,audio/wav" hidden>
+          <span id="upload-mp3-name" class="upload-filename">Chưa chọn file</span>
+        </div>
+        <div class="upload-row">
+          <label class="btn btn--small" for="song-beatmap-input">Chọn Beatmap (.json) — tuỳ chọn</label>
+          <input type="file" id="song-beatmap-input" accept="application/json" hidden>
+          <span id="upload-json-name" class="upload-filename">Không có — sẽ tự tạo nốt ngẫu nhiên</span>
+        </div>
+        <button class="btn btn--primary btn--small" id="btn-upload-confirm" disabled>Thêm Vào Thư Viện</button>
+      </div>
 
       <div class="song-list" id="song-list">
         <!-- song cards injected by js/main.js -->
-        <p class="empty-hint" id="song-list-empty">Chưa có bài hát nào. Tải một file .mp3 để bắt đầu.</p>
+        <p class="empty-hint" id="song-list-empty">Chưa có bài hát nào. Bấm "+ Thêm Bài" để tải nhạc.</p>
       </div>
 
       <footer class="song-actions">
@@ -62,9 +83,10 @@
 
     <!-- ---------------------------------------------------------
          SCREEN: AUDIO OFFSET CALIBRATION
-         A metronome click plays at a fixed interval; the player
-         taps SPACE on the beat. Average delta is stored as the
-         global audio offset used to correct judgement timing.
+         Manual entry — the player listens to their own device/headset
+         while playing a real song, judges whether hits feel early or
+         late, and nudges this value accordingly. Stored in localStorage
+         and applied as a correction to every judgement timing check.
          --------------------------------------------------------- -->
     <section id="screen-calibration" class="screen">
       <div class="bg-flame bg-flame--bottom"></div>
@@ -75,17 +97,26 @@
 
       <div class="calib-panel">
         <p class="calib-instruction">
-          Nghe tiếng "tick" và nhấn <kbd>SPACE</kbd> đúng lúc bạn nghe thấy.
-          Lặp lại ít nhất 8 lần để có kết quả chính xác.
+          Nếu lúc chơi bạn thấy bấm đúng nhịp mà hệ thống toàn báo trễ (Great/Miss dù bấm chuẩn),
+          hãy tăng/giảm số dưới đây rồi vào chơi thử lại. Số dương = bù trễ thiết bị,
+          số âm = bù cho thiết bị phản hồi nhanh hơn nhạc.
         </p>
-        <div class="calib-pulse" id="calib-pulse"></div>
-        <div class="calib-stats">
-          <div><span>Số lần đo</span><strong id="calib-count">0</strong></div>
-          <div><span>Offset hiện tại</span><strong id="calib-current-offset">0 ms</strong></div>
-          <div><span>Offset đề xuất</span><strong id="calib-suggested-offset">— ms</strong></div>
+        <div class="calib-manual">
+          <button class="icon-btn" id="btn-calib-minus">−</button>
+          <div class="calib-value">
+            <input type="number" id="calib-offset-input" value="0" step="1">
+            <span>ms</span>
+          </div>
+          <button class="icon-btn" id="btn-calib-plus">+</button>
+        </div>
+        <div class="calib-step-row">
+          <span>Bước nhảy:</span>
+          <button class="btn btn--small calib-step--active" data-step="5">±5</button>
+          <button class="btn btn--small" data-step="10">±10</button>
+          <button class="btn btn--small" data-step="25">±25</button>
         </div>
         <div class="calib-actions">
-          <button class="btn" id="btn-calib-reset">Đo Lại</button>
+          <button class="btn" id="btn-calib-reset">Đặt Về 0</button>
           <button class="btn btn--primary" id="btn-calib-save">Lưu Offset</button>
         </div>
       </div>
@@ -181,6 +212,10 @@
         <div class="settings-row">
           <label>Tốc Độ Rơi Nốt</label>
           <input type="range" id="setting-note-speed" min="5" max="20" value="10">
+          <p class="settings-hint">
+            Chỉ ảnh hưởng hình ảnh (nốt rơi nhanh/chậm trên màn hình), không đổi độ khó
+            chấm điểm — cửa sổ Perfect/Great luôn cố định. Chỉnh theo sở thích nhìn của bạn.
+          </p>
         </div>
         <div class="settings-row">
           <label>Số Phím (Key Mode)</label>
@@ -192,6 +227,15 @@
         </div>
         <div class="settings-row settings-row--keybinds" id="keybind-list">
           <!-- rebind rows injected by js/main.js, one per lane -->
+        </div>
+        <div class="settings-row">
+          <label>Nền Giao Diện</label>
+          <div class="bg-picker-grid" id="bg-picker-grid">
+            <!-- thumbnails injected by js/main.js from images/catalog.json -->
+          </div>
+          <p class="settings-hint" id="bg-picker-empty-hint">
+            Chưa có ảnh nền nào — thêm ảnh vào thư mục images/ và khai báo trong images/catalog.json.
+          </p>
         </div>
       </div>
     </section>
@@ -216,6 +260,10 @@
 
       <div class="editor-toolbar">
         <div class="editor-field">
+          <label>Tên Bài</label>
+          <input type="text" id="editor-title" value="Custom Beatmap" style="width:150px;">
+        </div>
+        <div class="editor-field">
           <label>BPM</label>
           <input type="number" id="editor-bpm" value="120" min="20" max="400">
         </div>
@@ -235,6 +283,14 @@
         <div class="editor-field">
           <label>Zoom</label>
           <input type="range" id="editor-zoom" min="40" max="400" value="140">
+        </div>
+        <div class="editor-field">
+          <label>Số Phím</label>
+          <select id="editor-keymode">
+            <option value="4">4K</option>
+            <option value="6" selected>6K</option>
+            <option value="8">8K</option>
+          </select>
         </div>
         <div class="editor-mode-tabs">
           <button class="editor-tab editor-tab--active" data-mode="manual">Manual Timeline</button>
@@ -257,6 +313,12 @@
       </div>
 
       <div class="editor-lane-labels" id="editor-lane-labels"></div>
+
+      <div class="editor-catalog-hint" id="editor-catalog-hint" hidden>
+        <p>Đã tải <code>beatmap.json</code>. Copy đoạn dưới đây vào <code>beatmaps/catalog.json</code> sau khi đặt file nhạc + beatmap vào đúng thư mục:</p>
+        <textarea id="editor-catalog-snippet" readonly rows="8"></textarea>
+        <button class="btn btn--small" id="btn-copy-catalog-snippet">Copy</button>
+      </div>
 
       <p class="empty-hint" id="editor-empty-hint">Tải 1 file nhạc để bắt đầu tạo beatmap.</p>
     </section>

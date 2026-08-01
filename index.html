@@ -206,17 +206,69 @@
       <header class="screen-header">
         <button class="icon-btn" data-action="go-mainmenu">←</button>
         <h2>Beatmap Editor</h2>
+        <label class="btn btn--small" for="editor-file-input">+ Tải Nhạc</label>
+        <input type="file" id="editor-file-input" accept="audio/mpeg,audio/mp3,audio/wav" hidden>
+        <input type="file" id="editor-import-input" accept="application/json" hidden>
+        <button class="btn btn--small" id="btn-editor-import">Import JSON</button>
+        <button class="btn btn--small" id="btn-editor-export">Export JSON</button>
+        <button class="btn btn--primary btn--small" id="btn-editor-testplay">▶ Test Play</button>
       </header>
-      <p class="empty-hint">Editor module (js/editor.js) sẽ được dựng ở bước tiếp theo.</p>
+
+      <div class="editor-toolbar">
+        <div class="editor-field">
+          <label>BPM</label>
+          <input type="number" id="editor-bpm" value="120" min="20" max="400">
+        </div>
+        <div class="editor-field">
+          <label>Offset (ms)</label>
+          <input type="number" id="editor-offset" value="0" step="10">
+        </div>
+        <div class="editor-field">
+          <label>Snap</label>
+          <select id="editor-snap">
+            <option value="1">1/1</option>
+            <option value="2">1/2</option>
+            <option value="4" selected>1/4</option>
+            <option value="8">1/8</option>
+          </select>
+        </div>
+        <div class="editor-field">
+          <label>Zoom</label>
+          <input type="range" id="editor-zoom" min="40" max="400" value="140">
+        </div>
+        <div class="editor-mode-tabs">
+          <button class="editor-tab editor-tab--active" data-mode="manual">Manual Timeline</button>
+          <button class="editor-tab" data-mode="live">Live Recording</button>
+        </div>
+      </div>
+
+      <div class="editor-transport">
+        <button class="icon-btn" id="btn-editor-playpause">▶</button>
+        <span id="editor-time-display">0:00 / 0:00</span>
+        <div class="editor-speed">
+          <button class="btn btn--small" data-speed="0.5">0.5x</button>
+          <button class="btn btn--small editor-speed--active" data-speed="1">1x</button>
+        </div>
+        <div class="editor-record-hint" id="editor-record-hint"></div>
+      </div>
+
+      <div class="editor-timeline-wrap" id="editor-timeline-wrap">
+        <canvas id="editor-timeline-canvas"></canvas>
+      </div>
+
+      <div class="editor-lane-labels" id="editor-lane-labels"></div>
+
+      <p class="empty-hint" id="editor-empty-hint">Tải 1 file nhạc để bắt đầu tạo beatmap.</p>
     </section>
 
   </div>
 
   <!-- ============================================================
-       SCRIPTS — order matters: audio → engine → main (orchestrator)
+       SCRIPTS — order matters: audio → engine → editor → main
        ============================================================ -->
   <script src="js/audio.js"></script>
   <script src="js/engine.js"></script>
+  <script src="js/editor.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

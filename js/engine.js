@@ -26,13 +26,13 @@ const GameEngine = (() => {
   const HOLD_TAIL_TOLERANCE_MS = 100; // grace window for releasing a hold late/early
 
   const JUDGEMENT_LABEL = {
-    perfect: "Hoàn Mỹ",
-    great: "Tốt",
-    miss: "Trượt",
+    perfect: "PERFECT",
+    great: "GREAT",
+    miss: "MISS",
   };
 
   const KEYMAPS = {
-    4: ["KeyS", "KeyD", "KeyJ", "KeyK"],
+    4: ["KeyD", "KeyF", "KeyJ", "KeyK"],
     6: ["KeyA", "KeyS", "KeyD", "KeyJ", "KeyK", "KeyL"],
     8: ["KeyA", "KeyS", "KeyD", "KeyF", "KeyJ", "KeyK", "KeyL", "Semicolon"],
   };
@@ -64,6 +64,7 @@ const GameEngine = (() => {
   let getSongTime = () => 0; // injected — usually AudioManager.getSongTime
   let initialized = false;  // guards against duplicate resize listeners
                              // when init() is called again (e.g. editor Test Play)
+  let lastFrameTime = 0;    // performance.now() of the previous frame, for real dt
 
   // DOM refs (HUD lives outside canvas per index.html)
   let elCombo, elScore, elJudgement, elKeyRow;
@@ -101,12 +102,27 @@ const GameEngine = (() => {
     gfx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     hitLineY = canvas.clientHeight * HIT_LINE_RATIO;
-    const laneGap = Math.min(90, canvas.clientWidth / (laneCount + 2));
+    // Lane spacing scales with actual screen width (clamped to a
+    // readable range) instead of a hard 90px cap that left large
+    // screens looking cramped relative to their size.
+    const laneGap = Math.max(70, Math.min(160, canvas.clientWidth * 0.11));
     const totalWidth = laneGap * (laneCount - 1);
     const startX = canvas.clientWidth / 2 - totalWidth / 2;
     laneX = Array.from({ length: laneCount }, (_, i) => startX + i * laneGap);
 
-    document.documentElement.style.setProperty("--lane-width", `${laneGap}px`);
+    positionKeyIndicators();
+  }
+
+  // Key indicators are positioned with an absolute pixel `left` taken
+  // directly from laneX — using CSS flex `gap` here would be wrong,
+  // since gap only spaces *between* elements and ignores their own
+  // width, so it never lines up exactly with the canvas lane centers.
+  function positionKeyIndicators() {
+    if (!elKeyRow) return;
+    keymap.forEach((code, i) => {
+      const el = elKeyRow.querySelector(`[data-code="${code}"]`);
+      if (el) el.style.left = `${laneX[i]}px`;
+    });
   }
 
   function setNoteSpeed(settingValue) {
@@ -144,6 +160,7 @@ const GameEngine = (() => {
     counts = { perfect: 0, great: 0, miss: 0 };
     totalJudged = 0; accuracySum = 0;
     running = true;
+    lastFrameTime = performance.now();
     updateHud();
     loop();
   }
@@ -158,12 +175,15 @@ const GameEngine = (() => {
   // ------------------------------------------------------------------
   function loop() {
     if (!running) return;
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastFrameTime) / 1000); // clamp guards against huge jumps (tab switch etc.)
+    lastFrameTime = now;
     const songTime = getSongTime();
 
     spawnDueNotes(songTime);
     updateHolds(songTime);
     expireMissedNotes(songTime);
-    updateParticles();
+    updateParticles(dt);
     render(songTime);
 
     if (beatmap && songTime > beatmap.notes[beatmap.notes.length - 1]?.time + 2 &&
@@ -207,15 +227,19 @@ const GameEngine = (() => {
   }
 
   function expireMissedNotes(songTime) {
-    activeNotes = activeNotes.filter((note) => {
-      if (note.judged) return false;
+    // Manual backward loop + splice instead of .filter(): filter()
+    // allocates a brand new array 60 times a second even when nothing
+    // expires, which was a real contributor to the frame jitter.
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+      const note = activeNotes[i];
+      if (note.judged) { activeNotes.splice(i, 1); continue; }
       const deadline = note.type === "hold" ? note.time + note.duration : note.time;
       if (songTime - deadline > GREAT_WINDOW_MS / 1000) {
-        judge(note, "miss");
-        return false;
+        activeNotes.splice(i, 1);
+        note.judged = true;
+        resolveJudgement(note, "miss");
       }
-      return true;
-    });
+    }
   }
 
   // ------------------------------------------------------------------
@@ -293,7 +317,15 @@ const GameEngine = (() => {
   // ------------------------------------------------------------------
   function judge(note, quality) {
     note.judged = true;
-    activeNotes = activeNotes.filter((n) => n !== note);
+    const idx = activeNotes.indexOf(note);
+    if (idx !== -1) activeNotes.splice(idx, 1);
+    resolveJudgement(note, quality);
+  }
+
+  // Shared scoring/combo/HUD/particle logic — called either from judge()
+  // (player input) or directly from expireMissedNotes() (which already
+  // handles its own array removal via splice, see above).
+  function resolveJudgement(note, quality) {
     counts[quality]++;
     totalJudged++;
 
@@ -369,15 +401,15 @@ const GameEngine = (() => {
     }
   }
 
-  function updateParticles() {
-    const dt = 1 / 60;
-    particles.forEach((p) => {
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vy += 400 * dt; // gravity
       p.life -= dt * 1.6;
-    });
-    particles = particles.filter((p) => p.life > 0);
+      if (p.life <= 0) particles.splice(i, 1);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -417,24 +449,49 @@ const GameEngine = (() => {
     const x = laneX[note.lane];
 
     if (note.type === "hold") {
-      const headY = yForTime(note.time, songTime);
-      const tailY = yForTime(note.time + note.duration, songTime);
-      // Glowing gradient bar between head and tail (clipped above hit line
-      // while being held, per genshin reference art).
-      const barTop = Math.min(headY, hitLineY);
-      const barBottom = Math.max(tailY, 0);
-      const grad = gfx.createLinearGradient(0, barTop, 0, hitLineY);
-      grad.addColorStop(0, "rgba(217,79,30,0.15)");
-      grad.addColorStop(1, "rgba(255,138,61,0.85)");
-      gfx.fillStyle = grad;
-      gfx.fillRect(x - 8, Math.min(tailY, hitLineY), 16, Math.max(0, hitLineY - Math.min(tailY, hitLineY)));
+      const headY = yForTime(note.time, songTime);           // arrives at hit line first (press here)
+      const tailY = yForTime(note.time + note.duration, songTime); // arrives later (release here)
+      const barTop = Math.min(tailY, hitLineY);
+      const barBottom = Math.min(headY, hitLineY);
+      const barHeight = Math.max(0, barBottom - barTop);
 
-      drawFlower(x, headY, note.holdActive ? "#ffe6d6" : "#ff9f6b");
-      drawFlower(x, tailY, "#ff7a5c");
+      if (barHeight > 0) {
+        const grad = gfx.createLinearGradient(0, barTop, 0, barBottom);
+        grad.addColorStop(0, "rgba(255,138,61,0.22)");
+        grad.addColorStop(1, "rgba(255,138,61,0.75)");
+        gfx.fillStyle = grad;
+        gfx.fillRect(x - 7, barTop, 14, barHeight);
+        gfx.strokeStyle = "rgba(255,224,163,0.45)";
+        gfx.lineWidth = 1.5;
+        gfx.strokeRect(x - 7, barTop, 14, barHeight);
+      }
+
+      drawFlower(x, headY, note.holdActive ? "#ffe6d6" : "#ff9f6b");      // head: filled flower, same as a tap note — press here
+      drawHoldTailMarker(x, tailY, note.holdActive);                      // tail: hollow ring + arrow — release here
     } else {
       const y = yForTime(note.time, songTime);
       drawFlower(x, y, "#ff9f6b");
     }
+  }
+
+  // Distinct silhouette from the head flower on purpose — a ring with a
+  // small downward chevron reads as "release point" at a glance, instead
+  // of looking like a second tap note stacked on the same lane.
+  function drawHoldTailMarker(x, y, active) {
+    const r = NOTE_RADIUS * 0.55;
+    gfx.save();
+    gfx.translate(x, y);
+    gfx.strokeStyle = active ? "#ffe6d6" : "rgba(255,159,107,0.85)";
+    gfx.lineWidth = 3;
+    gfx.beginPath();
+    gfx.arc(0, 0, r, 0, Math.PI * 2);
+    gfx.stroke();
+    gfx.beginPath();
+    gfx.moveTo(-7, r + 4);
+    gfx.lineTo(0, r + 13);
+    gfx.lineTo(7, r + 4);
+    gfx.stroke();
+    gfx.restore();
   }
 
   function yForTime(noteTime, songTime) {
@@ -449,7 +506,7 @@ const GameEngine = (() => {
     gfx.save();
     gfx.translate(x, y);
     gfx.shadowColor = color;
-    gfx.shadowBlur = 14;
+    gfx.shadowBlur = 10;
     for (let i = 0; i < petals; i++) {
       gfx.rotate((Math.PI * 2) / petals);
       gfx.beginPath();
@@ -460,7 +517,7 @@ const GameEngine = (() => {
     gfx.beginPath();
     gfx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
     gfx.fillStyle = "#ffe6d6";
-    gfx.shadowBlur = 6;
+    gfx.shadowBlur = 4;
     gfx.fill();
     gfx.restore();
   }

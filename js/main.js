@@ -89,10 +89,19 @@
   let readySongId = null;        // id of the song currently loaded into AudioManager + state.currentBeatmap
 
   const fileInput = document.getElementById("song-file-input");
+  const beatmapFileInput = document.getElementById("song-beatmap-input");
+  const uploadPanel = document.getElementById("upload-panel");
+  const uploadToggleBtn = document.getElementById("btn-upload-toggle");
+  const uploadMp3Name = document.getElementById("upload-mp3-name");
+  const uploadJsonName = document.getElementById("upload-json-name");
+  const btnUploadConfirm = document.getElementById("btn-upload-confirm");
   const songListEl = document.getElementById("song-list");
   const songListEmpty = document.getElementById("song-list-empty");
   const btnStartSong = document.getElementById("btn-start-song");
   const songHighscoreEl = document.getElementById("song-highscore");
+
+  let pendingMp3File = null;
+  let pendingBeatmapFile = null;
 
   async function loadCatalog() {
     try {
@@ -106,19 +115,58 @@
     renderSongList();
   }
 
-  fileInput.addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  uploadToggleBtn.addEventListener("click", () => {
+    uploadPanel.hidden = !uploadPanel.hidden;
+  });
 
-    await AudioManager.loadFile(file);
+  fileInput.addEventListener("change", (e) => {
+    pendingMp3File = e.target.files[0] || null;
+    uploadMp3Name.textContent = pendingMp3File ? pendingMp3File.name : "Chưa chọn file";
+    btnUploadConfirm.disabled = !pendingMp3File;
+  });
+
+  beatmapFileInput.addEventListener("change", (e) => {
+    pendingBeatmapFile = e.target.files[0] || null;
+    uploadJsonName.textContent = pendingBeatmapFile
+      ? pendingBeatmapFile.name
+      : "Không có — sẽ tự tạo nốt ngẫu nhiên";
+  });
+
+  // mp3 alone → placeholder chart auto-generated so it's still playable;
+  // mp3 + matching beatmap.json → chart plays exactly as authored.
+  btnUploadConfirm.addEventListener("click", async () => {
+    if (!pendingMp3File) return;
+    await AudioManager.loadFile(pendingMp3File);
+
     const id = `upload_${Date.now()}`;
-    const title = file.name.replace(/\.mp3$/i, "");
+    const title = pendingMp3File.name.replace(/\.(mp3|wav)$/i, "");
 
-    state.currentBeatmap = generatePlaceholderBeatmap(AudioManager.getDuration());
+    if (pendingBeatmapFile) {
+      try {
+        const text = await pendingBeatmapFile.text();
+        state.currentBeatmap = JSON.parse(text);
+      } catch (err) {
+        alert("File beatmap.json không hợp lệ — dùng nốt tự động thay thế.");
+        state.currentBeatmap = generatePlaceholderBeatmap(AudioManager.getDuration());
+      }
+    } else {
+      state.currentBeatmap = generatePlaceholderBeatmap(AudioManager.getDuration());
+    }
+
     state.library.unshift({ id, title, addedAt: Date.now(), source: "upload" });
     saveLibrary();
     state.selectedSongId = id;
     readySongId = id;
+
+    // reset the pending panel for next time
+    pendingMp3File = null;
+    pendingBeatmapFile = null;
+    fileInput.value = "";
+    beatmapFileInput.value = "";
+    uploadMp3Name.textContent = "Chưa chọn file";
+    uploadJsonName.textContent = "Không có — sẽ tự tạo nốt ngẫu nhiên";
+    btnUploadConfirm.disabled = true;
+    uploadPanel.hidden = true;
 
     renderSongList();
     btnStartSong.disabled = false;
@@ -224,52 +272,38 @@
   });
 
   // ------------------------------------------------------------------
-  // CALIBRATION
+  // CALIBRATION — manual entry. The player judges by feel while
+  // actually playing a song and nudges this value; no metronome/
+  // auto-detect involved.
   // ------------------------------------------------------------------
-  const calibPulse = document.getElementById("calib-pulse");
-  const calibCount = document.getElementById("calib-count");
-  const calibCurrentOffset = document.getElementById("calib-current-offset");
-  const calibSuggestedOffset = document.getElementById("calib-suggested-offset");
+  const calibInput = document.getElementById("calib-offset-input");
+  let calibStep = 5;
 
   document.querySelector('[data-action="go-calibration"]').addEventListener("click", () => {
-    calibCurrentOffset.textContent = `${AudioManager.getOffsetMs().toFixed(0)} ms`;
-    calibSuggestedOffset.textContent = "— ms";
-    calibCount.textContent = "0";
-    AudioManager.startCalibration(100, () => {
-      calibPulse.classList.add("pulse-beat");
-      setTimeout(() => calibPulse.classList.remove("pulse-beat"), 90);
+    calibInput.value = AudioManager.getOffsetMs();
+  });
+
+  document.querySelectorAll(".calib-step-row [data-step]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".calib-step-row [data-step]").forEach((b) =>
+        b.classList.remove("calib-step--active"));
+      btn.classList.add("calib-step--active");
+      calibStep = +btn.dataset.step;
     });
   });
 
-  document.addEventListener("keydown", (e) => {
-    if (document.getElementById("screen-calibration").classList.contains("screen--active")
-        && e.code === "Space") {
-      AudioManager.recordTap();
-      calibCount.textContent = AudioManager.getCalibTapCount();
-      calibSuggestedOffset.textContent = `${AudioManager.getSuggestedOffsetMs()} ms`;
-    }
+  document.getElementById("btn-calib-minus").addEventListener("click", () => {
+    calibInput.value = (+calibInput.value || 0) - calibStep;
   });
-
+  document.getElementById("btn-calib-plus").addEventListener("click", () => {
+    calibInput.value = (+calibInput.value || 0) + calibStep;
+  });
   document.getElementById("btn-calib-reset").addEventListener("click", () => {
-    AudioManager.startCalibration(100, () => {
-      calibPulse.classList.add("pulse-beat");
-      setTimeout(() => calibPulse.classList.remove("pulse-beat"), 90);
-    });
-    calibCount.textContent = "0";
-    calibSuggestedOffset.textContent = "— ms";
+    calibInput.value = 0;
   });
-
   document.getElementById("btn-calib-save").addEventListener("click", () => {
-    const suggested = AudioManager.getSuggestedOffsetMs();
-    AudioManager.saveOffset(suggested);
-    calibCurrentOffset.textContent = `${suggested} ms`;
-    AudioManager.stopCalibration();
+    AudioManager.saveOffset(+calibInput.value || 0);
     goScreen("screen-mainmenu");
-  });
-
-  // Stop the metronome if the player navigates away mid-calibration.
-  document.querySelectorAll('[data-action="go-mainmenu"]').forEach((btn) => {
-    btn.addEventListener("click", () => AudioManager.stopCalibration());
   });
 
   // ------------------------------------------------------------------
@@ -396,10 +430,82 @@
   });
 
   // ------------------------------------------------------------------
+  // BACKGROUND — images/catalog.json lists whatever images the site
+  // owner has placed under images/. Static hosting can't list a
+  // directory's contents on its own, hence the manifest (same pattern
+  // as beatmaps/catalog.json). One entry may set "default": true.
+  // Only the chosen image is ever fetched — picking from a long list
+  // doesn't cost bandwidth for images never selected.
+  // ------------------------------------------------------------------
+  const BG_CATALOG_URL = "images/catalog.json";
+  const STORAGE_BG = "tant_background_id";
+  let bgCatalog = [];
+  const bgLayer = document.getElementById("bg-layer");
+  const bgPickerGrid = document.getElementById("bg-picker-grid");
+  const bgPickerEmptyHint = document.getElementById("bg-picker-empty-hint");
+
+  async function loadBackgroundCatalog() {
+    try {
+      const res = await fetch(BG_CATALOG_URL);
+      if (res.ok) bgCatalog = await res.json();
+    } catch (err) {
+      console.warn("Không tải được danh sách ảnh nền:", err);
+    }
+
+    bgPickerEmptyHint.style.display = bgCatalog.length ? "none" : "block";
+    renderBackgroundPicker();
+
+    const savedId = localStorage.getItem(STORAGE_BG);
+    const chosen = bgCatalog.find((b) => b.id === savedId)
+      || bgCatalog.find((b) => b.default)
+      || null;
+    applyBackground(chosen);
+  }
+
+  function applyBackground(entry) {
+    if (entry) {
+      bgLayer.style.backgroundImage = `url(images/${entry.file})`;
+      document.documentElement.classList.add("has-bg-image");
+    } else {
+      bgLayer.style.backgroundImage = "";
+      document.documentElement.classList.remove("has-bg-image");
+    }
+    renderBackgroundPicker(entry?.id ?? null);
+  }
+
+  function renderBackgroundPicker(selectedId) {
+    bgPickerGrid.querySelectorAll(".bg-picker-thumb").forEach((el) => el.remove());
+
+    // "None" option always available to go back to the plain gradient.
+    const noneThumb = document.createElement("div");
+    noneThumb.className = "bg-picker-thumb bg-picker-thumb--none" +
+      (!selectedId ? " bg-picker-thumb--selected" : "");
+    noneThumb.textContent = "Không dùng ảnh";
+    noneThumb.addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_BG);
+      applyBackground(null);
+    });
+    bgPickerGrid.appendChild(noneThumb);
+
+    bgCatalog.forEach((entry) => {
+      const thumb = document.createElement("div");
+      thumb.className = "bg-picker-thumb" + (entry.id === selectedId ? " bg-picker-thumb--selected" : "");
+      thumb.style.backgroundImage = `url(images/${entry.file})`;
+      thumb.innerHTML = `<span>${escapeHtml(entry.name || entry.id)}</span>`;
+      thumb.addEventListener("click", () => {
+        localStorage.setItem(STORAGE_BG, entry.id);
+        applyBackground(entry);
+      });
+      bgPickerGrid.appendChild(thumb);
+    });
+  }
+
+  // ------------------------------------------------------------------
   // Boot
   // ------------------------------------------------------------------
   loadState();
   loadCatalog();
+  loadBackgroundCatalog();
   initSettingsUI();
   Editor.init();
 })();

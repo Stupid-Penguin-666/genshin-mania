@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thiên Âm Nhã Tập</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ============================================================
+       APP ROOT — every screen lives here, only one is ever visible
+       (toggled via the .screen--active class from js/main.js)
+       ============================================================ -->
+  <div id="app">
+
+    <!-- ---------------------------------------------------------
+         SCREEN: MAIN MENU
+         --------------------------------------------------------- -->
+    <section id="screen-mainmenu" class="screen screen--active">
+      <div class="bg-flame bg-flame--bottom"></div>
+      <div class="menu-panel">
+        <div class="brand">
+          <span class="brand__glyph">澄</span>
+          <h1 class="brand__title">Thiên Âm Nhã Tập</h1>
+          <p class="brand__subtitle">Night Harmony Suite</p>
+        </div>
+        <nav class="menu-nav">
+          <button class="btn btn--primary" data-action="go-songselect">Chơi Nhạc</button>
+          <button class="btn" data-action="go-calibration">Hiệu Chỉnh Độ Trễ</button>
+          <button class="btn" data-action="go-editor">Beatmap Editor</button>
+          <button class="btn" data-action="go-settings">Cài Đặt</button>
+        </nav>
+        <p class="uid-tag">UID: local-client</p>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------
+         SCREEN: SONG SELECT
+         Lists songs loaded via file upload + saved beatmaps.
+         Persisted song library lives in localStorage ("tant_library").
+         --------------------------------------------------------- -->
+    <section id="screen-songselect" class="screen">
+      <div class="bg-flame bg-flame--bottom"></div>
+      <header class="screen-header">
+        <button class="icon-btn" data-action="go-mainmenu">←</button>
+        <h2>Chủ Đề Nhạc Phổ</h2>
+        <label class="btn btn--small" for="song-file-input">+ Tải Nhạc (.mp3)</label>
+        <input type="file" id="song-file-input" accept="audio/mpeg,audio/mp3" hidden>
+      </header>
+
+      <div class="song-list" id="song-list">
+        <!-- song cards injected by js/main.js -->
+        <p class="empty-hint" id="song-list-empty">Chưa có bài hát nào. Tải một file .mp3 để bắt đầu.</p>
+      </div>
+
+      <footer class="song-actions">
+        <div class="high-score" id="song-highscore"></div>
+        <button class="btn btn--primary" id="btn-start-song" disabled>Bắt Đầu</button>
+      </footer>
+    </section>
+
+    <!-- ---------------------------------------------------------
+         SCREEN: AUDIO OFFSET CALIBRATION
+         A metronome click plays at a fixed interval; the player
+         taps SPACE on the beat. Average delta is stored as the
+         global audio offset used to correct judgement timing.
+         --------------------------------------------------------- -->
+    <section id="screen-calibration" class="screen">
+      <div class="bg-flame bg-flame--bottom"></div>
+      <header class="screen-header">
+        <button class="icon-btn" data-action="go-mainmenu">←</button>
+        <h2>Hiệu Chỉnh Độ Trễ Âm Thanh</h2>
+      </header>
+
+      <div class="calib-panel">
+        <p class="calib-instruction">
+          Nghe tiếng "tick" và nhấn <kbd>SPACE</kbd> đúng lúc bạn nghe thấy.
+          Lặp lại ít nhất 8 lần để có kết quả chính xác.
+        </p>
+        <div class="calib-pulse" id="calib-pulse"></div>
+        <div class="calib-stats">
+          <div><span>Số lần đo</span><strong id="calib-count">0</strong></div>
+          <div><span>Offset hiện tại</span><strong id="calib-current-offset">0 ms</strong></div>
+          <div><span>Offset đề xuất</span><strong id="calib-suggested-offset">— ms</strong></div>
+        </div>
+        <div class="calib-actions">
+          <button class="btn" id="btn-calib-reset">Đo Lại</button>
+          <button class="btn btn--primary" id="btn-calib-save">Lưu Offset</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------
+         SCREEN: GAMEPLAY
+         Canvas-driven. All lanes, notes, particles, judgement text
+         and combo bar are drawn by js/engine.js on every frame.
+         --------------------------------------------------------- -->
+    <section id="screen-gameplay" class="screen">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- HUD sits above the canvas as normal DOM (cheap to update,
+           no need to redraw text buffers every frame) -->
+      <div class="hud">
+        <div class="hud__top">
+          <div class="hud__song-info">
+            <span id="hud-song-title">—</span>
+            <span id="hud-score">0 (0.0%)</span>
+          </div>
+          <div class="hud__combo-wrap">
+            <span class="hud__combo-label">COMBO</span>
+            <span class="hud__combo-count" id="hud-combo-count">0</span>
+          </div>
+          <button class="icon-btn" id="btn-pause">⏸</button>
+        </div>
+      </div>
+
+      <!-- Judgement text ("Hoàn Mỹ" / "PERFECT" etc.) pops up here,
+           positioned above the hit line by engine.js -->
+      <div class="judgement-text" id="judgement-text"></div>
+
+      <!-- Key indicator row, mirrors the lanes drawn on canvas -->
+      <div class="key-row" id="key-row">
+        <!-- 6 x .key-indicator injected by js/engine.js based on keymap -->
+      </div>
+
+      <div class="bg-flame bg-flame--bottom bg-flame--gameplay"></div>
+
+      <!-- Pause overlay -->
+      <div class="pause-overlay" id="pause-overlay">
+        <div class="pause-panel">
+          <h3>Tạm Dừng</h3>
+          <button class="btn btn--primary" id="btn-resume">Tiếp Tục</button>
+          <button class="btn" id="btn-restart">Chơi Lại</button>
+          <button class="btn" id="btn-quit">Thoát</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------
+         SCREEN: RESULT
+         --------------------------------------------------------- -->
+    <section id="screen-result" class="screen">
+      <div class="bg-flame bg-flame--bottom"></div>
+      <div class="result-panel">
+        <div class="result-rank" id="result-rank">S</div>
+        <h2 id="result-song-title">—</h2>
+        <div class="result-grid">
+          <div class="result-stat"><span>Perfect</span><strong id="result-perfect">0</strong></div>
+          <div class="result-stat"><span>Great</span><strong id="result-great">0</strong></div>
+          <div class="result-stat"><span>Miss</span><strong id="result-miss">0</strong></div>
+          <div class="result-stat"><span>Max Combo</span><strong id="result-maxcombo">0</strong></div>
+          <div class="result-stat"><span>Độ Chính Xác</span><strong id="result-accuracy">0.0%</strong></div>
+          <div class="result-stat"><span>Điểm</span><strong id="result-score">0</strong></div>
+        </div>
+        <div class="result-actions">
+          <button class="btn" data-action="go-songselect">Chọn Bài Khác</button>
+          <button class="btn btn--primary" id="btn-retry">Chơi Lại</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------
+         SCREEN: SETTINGS
+         --------------------------------------------------------- -->
+    <section id="screen-settings" class="screen">
+      <div class="bg-flame bg-flame--bottom"></div>
+      <header class="screen-header">
+        <button class="icon-btn" data-action="go-mainmenu">←</button>
+        <h2>Cài Đặt</h2>
+      </header>
+      <div class="settings-panel">
+        <div class="settings-row">
+          <label>Âm Lượng Nhạc</label>
+          <input type="range" id="setting-music-volume" min="0" max="100" value="80">
+        </div>
+        <div class="settings-row">
+          <label>Âm Lượng Hiệu Ứng</label>
+          <input type="range" id="setting-sfx-volume" min="0" max="100" value="90">
+        </div>
+        <div class="settings-row">
+          <label>Tốc Độ Rơi Nốt</label>
+          <input type="range" id="setting-note-speed" min="5" max="20" value="10">
+        </div>
+        <div class="settings-row">
+          <label>Số Phím (Key Mode)</label>
+          <select id="setting-keymode">
+            <option value="4">4K</option>
+            <option value="6" selected>6K</option>
+            <option value="8">8K</option>
+          </select>
+        </div>
+        <div class="settings-row settings-row--keybinds" id="keybind-list">
+          <!-- rebind rows injected by js/main.js, one per lane -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------
+         SCREEN: EDITOR (placeholder stub — full editor is out of
+         scope for this skeleton pass, wired up as its own module
+         later in js/editor.js)
+         --------------------------------------------------------- -->
+    <section id="screen-editor" class="screen">
+      <div class="bg-flame bg-flame--bottom"></div>
+      <header class="screen-header">
+        <button class="icon-btn" data-action="go-mainmenu">←</button>
+        <h2>Beatmap Editor</h2>
+      </header>
+      <p class="empty-hint">Editor module (js/editor.js) sẽ được dựng ở bước tiếp theo.</p>
+    </section>
+
+  </div>
+
+  <!-- ============================================================
+       SCRIPTS — order matters: audio → engine → main (orchestrator)
+       ============================================================ -->
+  <script src="js/audio.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -13,8 +13,8 @@
 
 const Editor = (() => {
 
-  const LANE_COUNT = 6;
-  const KEY_LABELS = ["A", "S", "D", "J", "K", "L"];
+  let LANE_COUNT = 6;
+  let KEY_LABELS = ["A", "S", "D", "J", "K", "L"];
   const LANE_HEIGHT = 70;      // px per lane row on the timeline
   const HOLD_MIN_MS = 120;     // taps held longer than this become "hold" notes
 
@@ -39,7 +39,12 @@ const Editor = (() => {
 
   // DOM refs
   let elBpm, elOffset, elSnap, elZoom, elPlayPause, elTimeDisplay,
-      elRecordHint, elLaneLabels, elEmptyHint, elFileInput, elImportInput;
+      elRecordHint, elLaneLabels, elEmptyHint, elFileInput, elImportInput,
+      elKeymode, elTitle, elCatalogHint, elCatalogSnippet;
+
+  // Live-recording keymap derived from GameEngine's single source of
+  // truth for lane keybinds, kept in sync with LANE_COUNT.
+  let liveKeymap = {}; // { "KeyA": 0, ... }
 
   // ------------------------------------------------------------------
   // Init — called once when the app boots (module wires its own DOM,
@@ -61,8 +66,12 @@ const Editor = (() => {
     elEmptyHint = document.getElementById("editor-empty-hint");
     elFileInput = document.getElementById("editor-file-input");
     elImportInput = document.getElementById("editor-import-input");
+    elKeymode = document.getElementById("editor-keymode");
+    elTitle = document.getElementById("editor-title");
+    elCatalogHint = document.getElementById("editor-catalog-hint");
+    elCatalogSnippet = document.getElementById("editor-catalog-snippet");
 
-    buildLaneLabels();
+    setKeyMode(6);
     bindToolbar();
     bindTransport();
     bindTimelineInteraction();
@@ -72,6 +81,21 @@ const Editor = (() => {
 
     window.addEventListener("resize", resizeCanvas);
     requestAnimationFrame(renderLoop);
+  }
+
+  function isEditorActive() {
+    const el = document.getElementById("screen-editor");
+    return el && el.classList.contains("screen--active");
+  }
+
+  function setKeyMode(count) {
+    LANE_COUNT = count;
+    KEY_LABELS = GameEngine.KEYMAPS[count].map((code) =>
+      code.replace("Key", "").replace("Digit", "").replace("Semicolon", ";"));
+    liveKeymap = {};
+    GameEngine.KEYMAPS[count].forEach((code, i) => { liveKeymap[code] = i; });
+    buildLaneLabels();
+    resizeCanvas();
   }
 
   function buildLaneLabels() {
@@ -97,6 +121,17 @@ const Editor = (() => {
     elOffset.addEventListener("input", () => { offsetMs = +elOffset.value || 0; });
     elSnap.addEventListener("change", () => { snapDivisor = +elSnap.value; });
     elZoom.addEventListener("input", () => { pxPerSecond = +elZoom.value; resizeCanvas(); });
+    elKeymode.addEventListener("change", () => {
+      // Changing key mode while notes exist could orphan notes on lanes
+      // that no longer exist — simplest safe behavior for a skeleton is
+      // to just clear the chart, same as loading a new song would.
+      if (notes.length && !confirm("Đổi số phím sẽ xoá các nốt đang có. Tiếp tục?")) {
+        elKeymode.value = LANE_COUNT;
+        return;
+      }
+      notes = [];
+      setKeyMode(+elKeymode.value);
+    });
   }
 
   // Downsamples the decoded PCM into peak-amplitude buckets so drawing
@@ -178,7 +213,7 @@ const Editor = (() => {
         tab.classList.add("editor-tab--active");
         mode = tab.dataset.mode;
         elRecordHint.textContent = mode === "live"
-          ? "Nhấn Play rồi gõ phím A S D J K L theo nhịp để ghi nốt."
+          ? `Nhấn Play rồi gõ phím ${KEY_LABELS.join(" ")} theo nhịp để ghi nốt.`
           : "";
         elRecordHint.classList.remove("recording");
       });
@@ -251,10 +286,8 @@ const Editor = (() => {
   // ------------------------------------------------------------------
   // LIVE RECORDING — play the song, tap lane keys, notes land where
   // songTime says they landed. Holding a key past HOLD_MIN_MS records
-  // a Hold note instead of a Tap.
+  // a Hold note instead of a Tap. liveKeymap is (re)built in setKeyMode().
   // ------------------------------------------------------------------
-  const LIVE_KEYMAP = { KeyA: 0, KeyS: 1, KeyD: 2, KeyJ: 3, KeyK: 4, KeyL: 5 };
-
   function startLiveRecording() {
     liveHeldStart.clear();
     elRecordHint.textContent = "Đang ghi âm...";
@@ -262,23 +295,23 @@ const Editor = (() => {
   }
 
   function stopLiveRecording() {
-    elRecordHint.textContent = "Nhấn Play rồi gõ phím A S D J K L theo nhịp để ghi nốt.";
+    elRecordHint.textContent = `Nhấn Play rồi gõ phím ${KEY_LABELS.join(" ")} theo nhịp để ghi nốt.`;
     elRecordHint.classList.remove("recording");
     liveHeldStart.clear();
   }
 
   function bindKeyboard() {
     document.addEventListener("keydown", (e) => {
-      if (!document.getElementById("screen-editor").classList.contains("screen--active")) return;
+      if (!isEditorActive()) return;
       if (mode !== "live" || !isPlaying || e.repeat) return;
-      const lane = LIVE_KEYMAP[e.code];
+      const lane = liveKeymap[e.code];
       if (lane === undefined) return;
       if (!liveHeldStart.has(lane)) liveHeldStart.set(lane, currentTime());
     });
 
     document.addEventListener("keyup", (e) => {
       if (mode !== "live" || !isPlaying) return;
-      const lane = LIVE_KEYMAP[e.code];
+      const lane = liveKeymap[e.code];
       if (lane === undefined || !liveHeldStart.has(lane)) return;
       const startT = liveHeldStart.get(lane);
       liveHeldStart.delete(lane);
@@ -307,18 +340,38 @@ const Editor = (() => {
       notes = data.notes || [];
       elBpm.value = bpm;
       elOffset.value = offsetMs;
+      if (data.songTitle) elTitle.value = data.songTitle;
     });
 
     document.getElementById("btn-editor-testplay").addEventListener("click", testPlay);
+
+    document.getElementById("btn-copy-catalog-snippet").addEventListener("click", () => {
+      elCatalogSnippet.select();
+      navigator.clipboard?.writeText(elCatalogSnippet.value).catch(() => {
+        document.execCommand("copy"); // fallback for older browsers
+      });
+    });
   }
 
   function buildBeatmapObject() {
     return {
-      songTitle: "Custom Beatmap",
+      songTitle: elTitle?.value?.trim() || "Custom Beatmap",
       bpm,
       offset: offsetMs,
       notes: [...notes].sort((a, b) => a.time - b.time),
     };
+  }
+
+  // Turns "Tên Bài Của Tôi" into "ten-bai-cua-toi" for suggested file
+  // names — a rough ASCII-fold, not a full Vietnamese diacritics table,
+  // good enough for a filename slug.
+  function slugify(str) {
+    return str
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/gi, "d")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "custom-beatmap";
   }
 
   function exportJson() {
@@ -330,6 +383,22 @@ const Editor = (() => {
     a.download = "beatmap.json";
     a.click();
     URL.revokeObjectURL(url);
+
+    // Convenience snippet for beatmaps/catalog.json — the user still
+    // has to place the actual audio + beatmap.json files under the
+    // matching paths themselves; this just saves re-typing the entry.
+    const slug = slugify(data.songTitle);
+    const snippet = {
+      id: `builtin_${slug.replace(/-/g, "_")}`,
+      title: data.songTitle,
+      artist: "",
+      bpm: data.bpm,
+      difficulty: "?",
+      audioUrl: `audio/${slug}.mp3`,
+      beatmapUrl: `beatmaps/${slug}.json`,
+    };
+    elCatalogSnippet.value = JSON.stringify(snippet, null, 2);
+    elCatalogHint.hidden = false;
   }
 
   // ------------------------------------------------------------------
@@ -357,7 +426,7 @@ const Editor = (() => {
         document.getElementById("screen-editor").classList.add("screen--active");
       },
     });
-    document.getElementById("hud-song-title").textContent = "Test Play — Custom Beatmap";
+    document.getElementById("hud-song-title").textContent = `Test Play — ${buildBeatmapObject().songTitle}`;
     GameEngine.loadBeatmap(buildBeatmapObject());
     AudioManager.play(0);
     GameEngine.start();
@@ -374,15 +443,22 @@ const Editor = (() => {
   }
 
   function renderLoop() {
-    if (duration) draw();
-    if (elTimeDisplay && duration) {
-      const t = currentTime();
-      elTimeDisplay.textContent = `${formatTime(t)} / ${formatTime(duration)}`;
-      // auto-scroll the wrap to keep the playhead roughly in view while playing
-      if (isPlaying) {
-        const playheadX = t * pxPerSecond;
-        if (playheadX < wrapEl.scrollLeft || playheadX > wrapEl.scrollLeft + wrapEl.clientWidth - 60) {
-          wrapEl.scrollLeft = playheadX - 60;
+    // Only do the expensive canvas work while this screen is actually
+    // visible. Previously this loop drew unconditionally forever, so
+    // during Test Play it kept re-drawing the waveform/notes/grid in
+    // the background at the same time GameEngine was rendering the
+    // gameplay canvas — two render loops fighting for the main thread
+    // was the real cause of the Test Play stutter that was reported.
+    if (isEditorActive() && duration) {
+      draw();
+      if (elTimeDisplay) {
+        const t = currentTime();
+        elTimeDisplay.textContent = `${formatTime(t)} / ${formatTime(duration)}`;
+        if (isPlaying) {
+          const playheadX = t * pxPerSecond;
+          if (playheadX < wrapEl.scrollLeft || playheadX > wrapEl.scrollLeft + wrapEl.clientWidth - 60) {
+            wrapEl.scrollLeft = playheadX - 60;
+          }
         }
       }
     }

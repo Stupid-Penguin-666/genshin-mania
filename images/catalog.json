@@ -1,1 +1,4 @@
-[]
+[
+  { "id": "bg1", "name": "Hutao", "file": "bg-1.jpg", "default": true },
+  { "id": "bg2", "name": "Furina", "file": "bg-2.jpg", "default": false }
+]

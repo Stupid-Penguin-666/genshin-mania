@@ -44,10 +44,24 @@ html, body {
   color: var(--c-cream);
 }
 
+/* Fixed full-viewport background image layer (set via JS). Sits behind
+   #app at z-index 0; screens above it use a translucent neutral dark
+   overlay instead of an opaque gradient once an image is active, so
+   the overlay never clashes with whatever color palette the image has. */
+#bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 #app {
   position: relative;
   width: 100%;
   height: 100vh;
+  z-index: 1;
 }
 
 /* ==========================================================================
@@ -69,6 +83,16 @@ html, body {
   overflow: hidden;
 }
 .screen--active { display: flex; }
+
+/* When a background image is active (see #bg-layer), screens switch
+   to a neutral dark vignette instead of the fixed navy→flame gradient,
+   so the overlay never fights the image's own colors — works the same
+   whether the picked image is warm, cool, bright, or dark. */
+.has-bg-image .screen {
+  background:
+    linear-gradient(to top, rgba(5,8,14,0.82) 0%, rgba(5,8,14,0.35) 45%, rgba(5,8,14,0.55) 100%),
+    radial-gradient(ellipse 80% 60% at 50% 20%, rgba(5,8,14,0.15), rgba(5,8,14,0.55));
+}
 
 /* Bottom decorative "flame / floral" band — reference images show an
    orange filigree silhouette hugging the bottom edge of every screen.
@@ -161,13 +185,6 @@ html, body {
   align-items: center;
   gap: 28px;
 }
-.brand__glyph {
-  display: block;
-  font-size: 40px;
-  color: var(--c-gold);
-  text-shadow: var(--glow-gold);
-  margin-bottom: 4px;
-}
 .brand__title {
   font-family: var(--font-display);
   font-size: 48px;
@@ -236,31 +253,38 @@ html, body {
   max-width: 480px;
 }
 .calib-instruction { color: rgba(244,234,210,0.75); line-height: 1.6; }
-.calib-instruction kbd {
-  background: rgba(245,197,107,0.15);
-  border: 1px solid rgba(245,197,107,0.4);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-family: var(--font-body);
-}
-.calib-pulse {
-  width: 90px; height: 90px;
-  border-radius: 50%;
-  border: 2px solid var(--c-gold);
-  box-shadow: var(--glow-gold);
-  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out;
-}
-.calib-pulse.pulse-beat {
-  transform: scale(1.25);
-  box-shadow: 0 0 30px rgba(255,224,163,0.9);
-}
-.calib-stats {
+.calib-manual {
   display: flex;
-  gap: 32px;
+  align-items: center;
+  gap: 20px;
 }
-.calib-stats div { display: flex; flex-direction: column; gap: 4px; }
-.calib-stats span { font-size: 12px; color: rgba(244,234,210,0.5); }
-.calib-stats strong { font-size: 20px; color: var(--c-gold-bright); }
+.calib-manual .icon-btn { width: 52px; height: 52px; font-size: 22px; }
+.calib-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.calib-value input {
+  width: 110px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--c-gold-bright);
+  background: rgba(22,34,58,0.5);
+  border: 1px solid rgba(245,197,107,0.35);
+  border-radius: 10px;
+  padding: 6px 4px;
+}
+.calib-value span { color: rgba(244,234,210,0.6); font-size: 14px; }
+.calib-step-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(244,234,210,0.6);
+}
+.calib-step--active { background: rgba(245,197,107,0.2); border-color: var(--c-gold); }
 .calib-actions { display: flex; gap: 14px; }
 
 /* ==========================================================================
@@ -338,17 +362,25 @@ html, body {
 .judgement-text.judgement-miss    { color: var(--c-miss);    text-shadow: none; }
 
 /* Key indicator row — mirrors the lanes rendered on canvas beneath it */
+/* Key indicator row — each .key-indicator gets its `left` set in px by
+   engine.js (positionKeyIndicators), taken directly from the same
+   laneX array used to draw the canvas lanes. This guarantees pixel-
+   perfect alignment; a flex `gap` approach was tried before but gap
+   only spaces *between* elements and ignores their own width, so it
+   never lined up with the canvas lane centers. */
 .key-row {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 8%;
-  transform: translateX(-50%);
+  height: 48px;
   z-index: 3;
-  display: flex;
-  gap: var(--lane-width, 90px);
   pointer-events: none;
 }
 .key-indicator {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
   width: 48px; height: 48px;
   border-radius: 50%;
   border: 1.5px solid rgba(244,234,210,0.55);
@@ -542,6 +574,92 @@ html, body {
   padding: 4px 0;
 }
 
+.editor-catalog-hint {
+  position: relative; z-index: 2;
+  margin: 0 28px 16px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(245,197,107,0.25);
+  background: rgba(22,34,58,0.5);
+  font-size: 13px;
+}
+.editor-catalog-hint p { color: rgba(244,234,210,0.75); margin-bottom: 8px; }
+.editor-catalog-hint code {
+  background: rgba(245,197,107,0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+#editor-catalog-snippet {
+  width: 100%;
+  background: rgba(13,22,38,0.7);
+  border: 1px solid rgba(245,197,107,0.25);
+  border-radius: 8px;
+  color: var(--c-cream);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
+  resize: vertical;
+}
+
+/* ==========================================================================
+   SONG UPLOAD PANEL
+   ========================================================================== */
+.upload-panel {
+  position: relative; z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 28px 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(245,197,107,0.25);
+  background: rgba(22,34,58,0.5);
+}
+.upload-row { display: flex; align-items: center; gap: 14px; }
+.upload-filename { font-size: 13px; color: rgba(244,234,210,0.6); }
+
+/* ==========================================================================
+   SETTINGS EXTRAS — hint text + background picker grid
+   ========================================================================== */
+.settings-hint {
+  font-size: 12px;
+  color: rgba(244,234,210,0.5);
+  line-height: 1.5;
+}
+.bg-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+.bg-picker-thumb {
+  position: relative;
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid rgba(245,197,107,0.25);
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+.bg-picker-thumb span {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 2px 6px;
+  font-size: 10px;
+  background: rgba(5,8,14,0.7);
+  color: var(--c-cream);
+}
+.bg-picker-thumb--none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: rgba(244,234,210,0.6);
+  background: rgba(13,22,38,0.6);
+}
+.bg-picker-thumb--selected { border-color: var(--c-gold); box-shadow: var(--glow-gold); }
+
 @media (max-width: 720px) {
   .editor-toolbar { gap: 10px; }
   .editor-mode-tabs { margin-left: 0; }
@@ -549,7 +667,6 @@ html, body {
 
 @media (max-width: 720px) {
   .brand__title { font-size: 34px; }
-  .key-row { gap: 56px; }
   .key-indicator { width: 38px; height: 38px; font-size: 12px; }
   .judgement-text { font-size: 24px; }
   .result-grid { grid-template-columns: repeat(2, 1fr); }

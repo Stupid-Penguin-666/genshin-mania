@@ -341,6 +341,10 @@ const Editor = (() => {
       elBpm.value = bpm;
       elOffset.value = offsetMs;
       if (data.songTitle) elTitle.value = data.songTitle;
+      if (data.laneCount && data.laneCount !== LANE_COUNT) {
+        elKeymode.value = data.laneCount;
+        setKeyMode(data.laneCount);
+      }
     });
 
     document.getElementById("btn-editor-testplay").addEventListener("click", testPlay);
@@ -358,6 +362,7 @@ const Editor = (() => {
       songTitle: elTitle?.value?.trim() || "Custom Beatmap",
       bpm,
       offset: offsetMs,
+      laneCount: LANE_COUNT,
       notes: [...notes].sort((a, b) => a.time - b.time),
     };
   }

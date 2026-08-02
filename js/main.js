@@ -85,8 +85,14 @@
   //      fully supported, independent of the built-in catalog).
   // ------------------------------------------------------------------
   const CATALOG_URL = "beatmaps/catalog.json";
-  let builtinCatalog = [];       // [{id, title, artist, bpm, difficulty, duration, audioUrl, beatmapUrl}]
+  let builtinCatalog = [];       // [{id, title, artist, bpm, difficulty, duration, audioUrl, beatmapUrl, laneCount}]
   let readySongId = null;        // id of the song currently loaded into AudioManager + state.currentBeatmap
+
+  // Session-only cache of uploaded songs' raw File + parsed beatmap, so
+  // switching back to a previously uploaded song doesn't lose its
+  // "ready to play" state just because a different song was uploaded
+  // after it. Cleared on page refresh (never persisted — no server).
+  const uploadedAssets = new Map(); // id -> { file, beatmap }
 
   const fileInput = document.getElementById("song-file-input");
   const beatmapFileInput = document.getElementById("song-beatmap-input");
@@ -95,6 +101,7 @@
   const uploadMp3Name = document.getElementById("upload-mp3-name");
   const uploadJsonName = document.getElementById("upload-json-name");
   const btnUploadConfirm = document.getElementById("btn-upload-confirm");
+  const btnClearLibrary = document.getElementById("btn-clear-library");
   const songListEl = document.getElementById("song-list");
   const songListEmpty = document.getElementById("song-list-empty");
   const btnStartSong = document.getElementById("btn-start-song");
@@ -119,6 +126,20 @@
     uploadPanel.hidden = !uploadPanel.hidden;
   });
 
+  btnClearLibrary.addEventListener("click", () => {
+    if (!state.library.length) return;
+    if (!confirm("Xoá toàn bộ danh sách bài tự tải lên? (Bài Có Sẵn không bị ảnh hưởng)")) return;
+    state.library = [];
+    uploadedAssets.clear();
+    saveLibrary();
+    if (readySongId && !builtinCatalog.some((s) => s.id === readySongId)) readySongId = null;
+    state.selectedSongId = null;
+    state.currentBeatmap = null;
+    btnStartSong.disabled = true;
+    songHighscoreEl.textContent = "";
+    renderSongList();
+  });
+
   fileInput.addEventListener("change", (e) => {
     pendingMp3File = e.target.files[0] || null;
     uploadMp3Name.textContent = pendingMp3File ? pendingMp3File.name : "Chưa chọn file";
@@ -140,21 +161,28 @@
 
     const id = `upload_${Date.now()}`;
     const title = pendingMp3File.name.replace(/\.(mp3|wav)$/i, "");
+    let laneCount;
 
     if (pendingBeatmapFile) {
       try {
         const text = await pendingBeatmapFile.text();
         state.currentBeatmap = JSON.parse(text);
+        laneCount = state.currentBeatmap.laneCount || inferLaneCount(state.currentBeatmap.notes);
       } catch (err) {
         alert("File beatmap.json không hợp lệ — dùng nốt tự động thay thế.");
         state.currentBeatmap = generatePlaceholderBeatmap(AudioManager.getDuration());
+        laneCount = state.settings.keyMode;
       }
     } else {
+      // No chart provided → auto-generated at whatever Key Mode is
+      // currently active in Settings, and tagged as such.
       state.currentBeatmap = generatePlaceholderBeatmap(AudioManager.getDuration());
+      laneCount = state.settings.keyMode;
     }
 
-    state.library.unshift({ id, title, addedAt: Date.now(), source: "upload" });
+    state.library.unshift({ id, title, addedAt: Date.now(), source: "upload", laneCount });
     saveLibrary();
+    uploadedAssets.set(id, { file: pendingMp3File, beatmap: state.currentBeatmap });
     state.selectedSongId = id;
     readySongId = id;
 
@@ -172,6 +200,16 @@
     btnStartSong.disabled = false;
   });
 
+  // Beatmaps authored elsewhere (or by hand) may not declare laneCount
+  // explicitly — fall back to inferring it from the highest lane index
+  // actually used, rounded up to the nearest supported key mode.
+  function inferLaneCount(notes) {
+    const maxLane = notes.reduce((max, n) => Math.max(max, n.lane), 0);
+    if (maxLane <= 3) return 4;
+    if (maxLane <= 5) return 6;
+    return 8;
+  }
+
   function combinedSongList() {
     const builtins = builtinCatalog.map((s) => ({ ...s, source: "builtin" }));
     const uploads = state.library.filter((s) => s.source !== "builtin");
@@ -187,12 +225,13 @@
       const card = document.createElement("div");
       card.className = "song-card" + (song.id === state.selectedSongId ? " song-card--selected" : "");
       const tag = song.source === "builtin" ? "Có Sẵn" : "Tự Tải Lên";
+      const laneCount = song.laneCount || 6;
       const meta = song.source === "builtin"
         ? `${tag} · ${song.difficulty || "?"} · ${song.bpm} BPM`
         : `${tag} · Đã thêm ${new Date(song.addedAt).toLocaleDateString("vi-VN")}`;
       card.innerHTML = `
         <div>
-          <div class="song-card__title">${escapeHtml(song.title)}</div>
+          <div class="song-card__title">${escapeHtml(song.title)}<span class="song-card__badge">${laneCount}K</span></div>
           <div class="song-card__meta" data-role="meta">${escapeHtml(meta)}</div>
         </div>
       `;
@@ -211,12 +250,20 @@
       : "Chưa có điểm";
 
     if (song.source === "upload") {
-      // Only playable this session if it's the file just uploaded —
-      // audio isn't persisted across reloads on a $0-backend site.
-      btnStartSong.disabled = readySongId !== song.id;
-      if (readySongId !== song.id) {
+      const cached = uploadedAssets.get(song.id);
+      if (!cached) {
+        // Shouldn't normally happen (cache only clears on Xoá Danh Sách
+        // or page refresh, and a refreshed library entry wouldn't be
+        // selectable anyway since it's gone from state.library too) —
+        // kept as a safety net.
+        btnStartSong.disabled = true;
         songHighscoreEl.textContent += " — hãy tải lại file mp3 này để chơi";
+        return;
       }
+      await AudioManager.loadFile(cached.file);
+      state.currentBeatmap = cached.beatmap;
+      readySongId = song.id;
+      btnStartSong.disabled = false;
       return;
     }
 
@@ -249,25 +296,65 @@
   }
 
   // Fallback beatmap for freshly uploaded songs that don't have a
-  // matching .json yet. Full custom charting happens in the Editor —
-  // this just makes sure an upload is playable immediately.
+  // matching .json yet. Tracks how long each lane stays "busy" from an
+  // active Hold note so a Tap is never dropped on top of one — doing so
+  // previously made that section un-hittable (Fixed per user report).
   function generatePlaceholderBeatmap(durationSec, bpm = 120) {
     const notes = [];
     const beatSec = 60 / bpm;
     const laneCount = state.settings.keyMode;
+    const laneBusyUntil = new Array(laneCount).fill(0);
+
     for (let t = 2; t < durationSec - 2; t += beatSec) {
       if (Math.random() < 0.6) {
-        const lane = Math.floor(Math.random() * laneCount);
+        const freeLanes = [];
+        for (let l = 0; l < laneCount; l++) if (laneBusyUntil[l] <= t) freeLanes.push(l);
+        if (!freeLanes.length) continue; // every lane still busy with a hold — skip this beat
+        const lane = freeLanes[Math.floor(Math.random() * freeLanes.length)];
         const isHold = Math.random() < 0.15;
-        notes.push(isHold
-          ? { time: t, lane, type: "hold", duration: beatSec * 2 }
-          : { time: t, lane, type: "tap" });
+        if (isHold) {
+          const duration = beatSec * 2;
+          notes.push({ time: t, lane, type: "hold", duration });
+          laneBusyUntil[lane] = t + duration;
+        } else {
+          notes.push({ time: t, lane, type: "tap" });
+        }
       }
     }
-    return { songTitle: "Placeholder", bpm, offset: 0, notes };
+    return { songTitle: "Placeholder", bpm, offset: 0, laneCount, notes };
   }
 
+  // ------------------------------------------------------------------
+  // KEY MODE MISMATCH WARNING — a chart authored for one key mode
+  // (e.g. 6K) can't play correctly if Settings is on another (e.g. 4K).
+  // ------------------------------------------------------------------
+  const keymodeModal = document.getElementById("keymode-warning-modal");
+  const keymodeModalText = document.getElementById("keymode-warning-text");
+
   btnStartSong.addEventListener("click", () => {
+    const song = combinedSongList().find((s) => s.id === state.selectedSongId);
+    const songLaneCount = song?.laneCount || state.currentBeatmap?.laneCount || 6;
+    if (songLaneCount !== state.settings.keyMode) {
+      keymodeModalText.textContent =
+        `Bài này được tạo cho chế độ ${songLaneCount}K, nhưng Cài Đặt hiện đang ở ${state.settings.keyMode}K. ` +
+        `Chơi sai chế độ sẽ khiến vài nốt không thể bấm được.`;
+      keymodeModal.dataset.targetLaneCount = songLaneCount;
+      keymodeModal.hidden = false;
+      return;
+    }
+    startGameplay();
+  });
+
+  document.getElementById("btn-keymode-warning-cancel").addEventListener("click", () => {
+    keymodeModal.hidden = true;
+  });
+  document.getElementById("btn-keymode-warning-switch").addEventListener("click", () => {
+    const target = +keymodeModal.dataset.targetLaneCount;
+    state.settings.keyMode = target;
+    document.getElementById("setting-keymode").value = target;
+    saveSettings();
+    gameplayInitialized = false;
+    keymodeModal.hidden = true;
     startGameplay();
   });
 

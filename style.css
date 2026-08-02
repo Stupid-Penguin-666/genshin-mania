@@ -694,6 +694,14 @@ html, body {
   background: rgba(5,8,14,0.75);
   backdrop-filter: blur(3px);
 }
+/* Without this, the `display: flex` above always wins over the browser's
+   built-in `[hidden] { display: none }` rule — author CSS beats the UA
+   stylesheet no matter the specificity — so the modal stayed visible
+   from page load regardless of the hidden attribute, and toggling
+   .hidden via JS silently did nothing. */
+.modal-overlay[hidden] {
+  display: none;
+}
 .modal-panel {
   width: min(380px, 90vw);
   padding: 26px 24px;

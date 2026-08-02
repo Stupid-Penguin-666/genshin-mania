@@ -49,6 +49,7 @@
       <header class="screen-header">
         <button class="icon-btn" data-action="go-mainmenu">←</button>
         <h2>Chủ Đề Nhạc Phổ</h2>
+        <button class="btn btn--small" id="btn-clear-library">Xoá Danh Sách</button>
         <button class="btn btn--small" id="btn-upload-toggle">+ Thêm Bài</button>
       </header>
 
@@ -311,6 +312,7 @@
       <div class="editor-timeline-wrap" id="editor-timeline-wrap">
         <canvas id="editor-timeline-canvas"></canvas>
       </div>
+      <p class="editor-timeline-hint">Mẹo: double-click vào timeline để tua nhạc tới đúng vị trí đó.</p>
 
       <div class="editor-lane-labels" id="editor-lane-labels"></div>
 
@@ -322,6 +324,22 @@
 
       <p class="empty-hint" id="editor-empty-hint">Tải 1 file nhạc để bắt đầu tạo beatmap.</p>
     </section>
+
+    <!-- ---------------------------------------------------------
+         KEY MODE MISMATCH WARNING — shown when the selected song's
+         chart was authored for a different key mode than Settings
+         currently has active. Offers a one-click fix.
+         --------------------------------------------------------- -->
+    <div class="modal-overlay" id="keymode-warning-modal" hidden>
+      <div class="modal-panel">
+        <h3>Lệch Số Phím</h3>
+        <p id="keymode-warning-text"></p>
+        <div class="modal-actions">
+          <button class="btn" id="btn-keymode-warning-cancel">Huỷ</button>
+          <button class="btn btn--primary" id="btn-keymode-warning-switch">Đổi Ngay & Chơi</button>
+        </div>
+      </div>
+    </div>
 
   </div>
 

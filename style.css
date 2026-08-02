@@ -230,6 +230,17 @@ html, body {
 .song-card--selected { border-color: var(--c-gold); box-shadow: var(--glow-gold); }
 .song-card__title { font-weight: 600; color: var(--c-cream); }
 .song-card__meta { font-size: 12px; color: rgba(244,234,210,0.5); }
+.song-card__badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(245,197,107,0.4);
+  color: var(--c-gold-bright);
+  background: rgba(245,197,107,0.1);
+  margin-left: 8px;
+}
 
 .song-actions {
   position: relative; z-index: 2;
@@ -308,6 +319,7 @@ html, body {
   pointer-events: none;
 }
 .hud__top {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -320,7 +332,15 @@ html, body {
   color: rgba(244,234,210,0.85);
 }
 #hud-score { color: var(--c-gold-bright); font-weight: 600; font-size: 15px; }
+/* Positioned absolutely and centered on the *screen*, not as a flex
+   sibling of the song title — otherwise a long song title pushes the
+   flex midpoint off-center (space-between only balances the gaps
+   between items, not their visual center). */
 .hud__combo-wrap {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -381,8 +401,8 @@ html, body {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  width: 48px; height: 48px;
-  border-radius: 50%;
+  width: 46px; height: 46px;
+  border-radius: 10px;
   border: 1.5px solid rgba(244,234,210,0.55);
   background: rgba(13,22,38,0.35);
   display: flex;
@@ -659,6 +679,50 @@ html, body {
   background: rgba(13,22,38,0.6);
 }
 .bg-picker-thumb--selected { border-color: var(--c-gold); box-shadow: var(--glow-gold); }
+
+/* ==========================================================================
+   MODAL — generic overlay dialog (currently used for the Key Mode
+   mismatch warning)
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5,8,14,0.75);
+  backdrop-filter: blur(3px);
+}
+.modal-panel {
+  width: min(380px, 90vw);
+  padding: 26px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(245,197,107,0.35);
+  background: var(--c-navy);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  text-align: center;
+}
+.modal-panel h3 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--c-gold-bright);
+  margin-bottom: 12px;
+}
+.modal-panel p {
+  font-size: 14px;
+  color: rgba(244,234,210,0.8);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.modal-actions { display: flex; gap: 12px; justify-content: center; }
+
+.editor-timeline-hint {
+  position: relative; z-index: 2;
+  margin: 6px 28px 0;
+  font-size: 11px;
+  color: rgba(244,234,210,0.4);
+}
 
 @media (max-width: 720px) {
   .editor-toolbar { gap: 10px; }

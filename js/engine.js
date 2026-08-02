@@ -426,8 +426,10 @@ const GameEngine = (() => {
   }
 
   function drawLanes(w, h) {
-    gfx.strokeStyle = "rgba(244,234,210,0.12)";
-    gfx.lineWidth = 1;
+    // Slightly darker/thicker than before per feedback — was nearly
+    // invisible at 0.12 opacity / 1px.
+    gfx.strokeStyle = "rgba(244,234,210,0.18)";
+    gfx.lineWidth = 1.5;
     laneX.forEach((x) => {
       gfx.beginPath();
       gfx.moveTo(x, 0);
@@ -443,7 +445,19 @@ const GameEngine = (() => {
     gfx.moveTo(laneX[0] - 30, hitLineY);
     gfx.lineTo(laneX[laneX.length - 1] + 30, hitLineY);
     gfx.stroke();
+
+    // Circle marker per lane on the hit line, matching the reference
+    // screenshot — the DOM .key-indicator row sits just below these.
+    laneX.forEach((x) => {
+      gfx.beginPath();
+      gfx.arc(x, hitLineY, 9, 0, Math.PI * 2);
+      gfx.strokeStyle = "rgba(244,234,210,0.7)";
+      gfx.lineWidth = 1.5;
+      gfx.stroke();
+    });
   }
+
+  const HOLD_BAR_WIDTH = 30; // wide bar per feedback (was 14px, too thin)
 
   function drawNote(note, songTime) {
     const x = laneX[note.lane];
@@ -454,44 +468,28 @@ const GameEngine = (() => {
       const barTop = Math.min(tailY, hitLineY);
       const barBottom = Math.min(headY, hitLineY);
       const barHeight = Math.max(0, barBottom - barTop);
+      const half = HOLD_BAR_WIDTH / 2;
 
       if (barHeight > 0) {
         const grad = gfx.createLinearGradient(0, barTop, 0, barBottom);
-        grad.addColorStop(0, "rgba(255,138,61,0.22)");
-        grad.addColorStop(1, "rgba(255,138,61,0.75)");
+        grad.addColorStop(0, "rgba(255,138,61,0.25)");
+        grad.addColorStop(1, "rgba(255,138,61,0.8)");
         gfx.fillStyle = grad;
-        gfx.fillRect(x - 7, barTop, 14, barHeight);
-        gfx.strokeStyle = "rgba(255,224,163,0.45)";
+        gfx.fillRect(x - half, barTop, HOLD_BAR_WIDTH, barHeight);
+        gfx.strokeStyle = "rgba(255,224,163,0.5)";
         gfx.lineWidth = 1.5;
-        gfx.strokeRect(x - 7, barTop, 14, barHeight);
+        gfx.strokeRect(x - half, barTop, HOLD_BAR_WIDTH, barHeight);
       }
 
-      drawFlower(x, headY, note.holdActive ? "#ffe6d6" : "#ff9f6b");      // head: filled flower, same as a tap note — press here
-      drawHoldTailMarker(x, tailY, note.holdActive);                      // tail: hollow ring + arrow — release here
+      // Head and tail both drawn as the same flower as a Tap note —
+      // symmetric, matches how it should be judged (either end is a
+      // normal hit), simpler to read than a mismatched head/tail pair.
+      drawFlower(x, headY, note.holdActive ? "#ffe6d6" : "#ff9f6b");
+      drawFlower(x, tailY, note.holdActive ? "#ffe6d6" : "#ff9f6b");
     } else {
       const y = yForTime(note.time, songTime);
       drawFlower(x, y, "#ff9f6b");
     }
-  }
-
-  // Distinct silhouette from the head flower on purpose — a ring with a
-  // small downward chevron reads as "release point" at a glance, instead
-  // of looking like a second tap note stacked on the same lane.
-  function drawHoldTailMarker(x, y, active) {
-    const r = NOTE_RADIUS * 0.55;
-    gfx.save();
-    gfx.translate(x, y);
-    gfx.strokeStyle = active ? "#ffe6d6" : "rgba(255,159,107,0.85)";
-    gfx.lineWidth = 3;
-    gfx.beginPath();
-    gfx.arc(0, 0, r, 0, Math.PI * 2);
-    gfx.stroke();
-    gfx.beginPath();
-    gfx.moveTo(-7, r + 4);
-    gfx.lineTo(0, r + 13);
-    gfx.lineTo(7, r + 4);
-    gfx.stroke();
-    gfx.restore();
   }
 
   function yForTime(noteTime, songTime) {

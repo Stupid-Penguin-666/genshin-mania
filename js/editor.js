@@ -47,6 +47,51 @@ const Editor = (() => {
   let liveKeymap = {}; // { "KeyA": 0, ... }
 
   // ------------------------------------------------------------------
+  // UNDO/REDO — snapshot-based (deep copy of `notes` per step). Simple
+  // and correct for a chart with at most a few hundred notes; a diff-
+  // based history would be overkill here.
+  // ------------------------------------------------------------------
+  const HISTORY_LIMIT = 100;
+  let history = [];
+  let historyIndex = -1;
+  let elUndoBtn, elRedoBtn;
+
+  function resetHistory() {
+    history = [JSON.parse(JSON.stringify(notes))];
+    historyIndex = 0;
+    updateHistoryButtons();
+  }
+
+  function pushHistory() {
+    // Drop any "future" redo states once a new edit branches off from
+    // somewhere back in history — standard undo-stack behavior.
+    history = history.slice(0, historyIndex + 1);
+    history.push(JSON.parse(JSON.stringify(notes)));
+    if (history.length > HISTORY_LIMIT) history.shift();
+    else historyIndex++;
+    updateHistoryButtons();
+  }
+
+  function undo() {
+    if (historyIndex <= 0) return;
+    historyIndex--;
+    notes = JSON.parse(JSON.stringify(history[historyIndex]));
+    updateHistoryButtons();
+  }
+
+  function redo() {
+    if (historyIndex >= history.length - 1) return;
+    historyIndex++;
+    notes = JSON.parse(JSON.stringify(history[historyIndex]));
+    updateHistoryButtons();
+  }
+
+  function updateHistoryButtons() {
+    if (elUndoBtn) elUndoBtn.disabled = historyIndex <= 0;
+    if (elRedoBtn) elRedoBtn.disabled = historyIndex >= history.length - 1;
+  }
+
+  // ------------------------------------------------------------------
   // Init — called once when the app boots (module wires its own DOM,
   // consistent with how audio.js / engine.js manage their own scope)
   // ------------------------------------------------------------------
@@ -70,6 +115,8 @@ const Editor = (() => {
     elTitle = document.getElementById("editor-title");
     elCatalogHint = document.getElementById("editor-catalog-hint");
     elCatalogSnippet = document.getElementById("editor-catalog-snippet");
+    elUndoBtn = document.getElementById("btn-editor-undo");
+    elRedoBtn = document.getElementById("btn-editor-redo");
 
     setKeyMode(6);
     bindToolbar();
@@ -78,9 +125,29 @@ const Editor = (() => {
     bindImportExport();
     bindModeTabs();
     bindKeyboard();
+    bindHistoryControls();
+    resetHistory();
 
     window.addEventListener("resize", resizeCanvas);
     requestAnimationFrame(renderLoop);
+  }
+
+  function bindHistoryControls() {
+    elUndoBtn.addEventListener("click", undo);
+    elRedoBtn.addEventListener("click", redo);
+
+    document.addEventListener("keydown", (e) => {
+      if (!isEditorActive()) return;
+      // Don't hijack undo/redo while the person is typing in a text/number
+      // field (BPM, Offset, Title) — let the browser's native input undo
+      // work there instead.
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+
+      if (e.code === "KeyZ" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if (e.code === "KeyY" || (e.code === "KeyZ" && e.shiftKey)) { e.preventDefault(); redo(); }
+    });
   }
 
   function isEditorActive() {
@@ -88,12 +155,24 @@ const Editor = (() => {
     return el && el.classList.contains("screen--active");
   }
 
+  // Reads the same localStorage key main.js's Settings screen writes to
+  // (kept independent on purpose — this module doesn't import main.js,
+  // same pattern as AudioManager reading its own offset directly).
+  const STORAGE_KEYMAPS = "tant_keymaps";
+  function getKeymapFor(count) {
+    let custom = {};
+    try { custom = JSON.parse(localStorage.getItem(STORAGE_KEYMAPS) || "{}"); } catch { /* ignore */ }
+    const saved = custom[count];
+    return (Array.isArray(saved) && saved.length === count) ? saved : GameEngine.KEYMAPS[count];
+  }
+
   function setKeyMode(count) {
     LANE_COUNT = count;
-    KEY_LABELS = GameEngine.KEYMAPS[count].map((code) =>
+    const keymap = getKeymapFor(count);
+    KEY_LABELS = keymap.map((code) =>
       code.replace("Key", "").replace("Digit", "").replace("Semicolon", ";"));
     liveKeymap = {};
-    GameEngine.KEYMAPS[count].forEach((code, i) => { liveKeymap[code] = i; });
+    keymap.forEach((code, i) => { liveKeymap[code] = i; });
     buildLaneLabels();
     resizeCanvas();
   }
@@ -112,6 +191,7 @@ const Editor = (() => {
       await AudioManager.loadFile(file);
       duration = AudioManager.getDuration();
       notes = [];
+      resetHistory();
       buildWaveform(file);
       elEmptyHint.style.display = "none";
       resizeCanvas();
@@ -130,6 +210,7 @@ const Editor = (() => {
         return;
       }
       notes = [];
+      resetHistory();
       setKeyMode(+elKeymode.value);
     });
   }
@@ -233,6 +314,7 @@ const Editor = (() => {
       const existing = findNoteNear(lane, time);
       if (existing) {
         notes = notes.filter((n) => n !== existing);
+        pushHistory();
         return;
       }
       dragStart = { lane, time: snapTime(time) };
@@ -249,6 +331,7 @@ const Editor = (() => {
         } else {
           notes.push({ time: dragStart.time, lane, type: "tap" });
         }
+        pushHistory();
       }
       dragStart = null;
     });
@@ -321,6 +404,7 @@ const Editor = (() => {
       } else {
         notes.push({ time: startT, lane, type: "tap" });
       }
+      pushHistory();
     });
   }
 
@@ -333,8 +417,13 @@ const Editor = (() => {
     elImportInput.addEventListener("change", async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const text = await file.text();
-      const data = JSON.parse(text);
+      let data;
+      try {
+        data = JSON.parse(await file.text());
+      } catch (err) {
+        alert("File beatmap.json không hợp lệ.");
+        return;
+      }
       bpm = data.bpm || 120;
       offsetMs = data.offset || 0;
       notes = data.notes || [];
@@ -345,6 +434,7 @@ const Editor = (() => {
         elKeymode.value = data.laneCount;
         setKeyMode(data.laneCount);
       }
+      resetHistory();
     });
 
     document.getElementById("btn-editor-testplay").addEventListener("click", testPlay);
@@ -421,7 +511,7 @@ const Editor = (() => {
     const gameplayCanvas = document.getElementById("game-canvas");
     GameEngine.init(gameplayCanvas, {
       laneCount: LANE_COUNT,
-      keymap: GameEngine.KEYMAPS[LANE_COUNT],
+      keymap: getKeymapFor(LANE_COUNT),
       noteSpeed: 10,
       getSongTime: AudioManager.getSongTime,
       onFinish: () => {

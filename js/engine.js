@@ -66,6 +66,16 @@ const GameEngine = (() => {
                              // when init() is called again (e.g. editor Test Play)
   let lastFrameTime = 0;    // performance.now() of the previous frame, for real dt
 
+  // Glow (shadowBlur) looks nicer but is expensive on mobile GPUs.
+  // `pointer: coarse` is true on touch-primary devices (phones/tablets)
+  // and false on mouse/trackpad devices — a more reliable signal than
+  // parsing the user-agent string.
+  const useGlow = !window.matchMedia("(pointer: coarse)").matches;
+
+  // Practice Mode: when set, the loop re-seeks and restarts once
+  // songTime passes loopEnd. Cleared by passing null via setLoopRegion.
+  let loopRegion = null; // { start, end, onLoop }
+
   // DOM refs (HUD lives outside canvas per index.html)
   let elCombo, elScore, elJudgement, elKeyRow;
 
@@ -96,7 +106,10 @@ const GameEngine = (() => {
   }
 
   function resize() {
-    const dpr = window.devicePixelRatio || 1;
+    // Capped at 2 — many phones report devicePixelRatio 3, which is
+    // imperceptible at normal viewing distance but roughly doubles the
+    // pixels the canvas has to fill every frame for zero visible gain.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = canvas.clientWidth * dpr;
     canvas.height = canvas.clientHeight * dpr;
     gfx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -153,6 +166,15 @@ const GameEngine = (() => {
   function start() {
     activeNotes = [];
     noteCursor = 0;
+    // Practice Mode: skip straight to the first note at/after the loop's
+    // start point. Leaving noteCursor at 0 would spawn every earlier
+    // note instantly (since spawnDueNotes fast-forwards through anything
+    // already "due") and immediately judge each one MISS, since they'd
+    // already be past their hit window — a burst of misses on every lap.
+    if (loopRegion && beatmap) {
+      const idx = beatmap.notes.findIndex((n) => n.time >= loopRegion.start);
+      noteCursor = idx === -1 ? beatmap.notes.length : idx;
+    }
     heldLanes.clear();
     activeHolds.clear();
     particles = [];
@@ -186,7 +208,13 @@ const GameEngine = (() => {
     updateParticles(dt);
     render(songTime);
 
-    if (beatmap && songTime > beatmap.notes[beatmap.notes.length - 1]?.time + 2 &&
+    if (loopRegion && songTime >= loopRegion.end) {
+      loopRegion.onLoop(); // caller re-seeks audio back to loopRegion.start
+      start();             // fresh attempt each lap: resets combo/score/notes,
+      return;               // and already schedules its own next frame — don't double-schedule
+    }
+
+    if (!loopRegion && beatmap && songTime > beatmap.notes[beatmap.notes.length - 1]?.time + 2 &&
         activeNotes.length === 0) {
       running = false;
       onFinish && onFinish(buildResultStats());
@@ -194,6 +222,13 @@ const GameEngine = (() => {
     }
 
     rafId = requestAnimationFrame(loop);
+  }
+
+  // Practice Mode support — pass null to clear. `onLoop` is called right
+  // before the engine resets, so the caller can re-seek AudioManager to
+  // `start` first (engine doesn't own audio playback).
+  function setLoopRegion(region) {
+    loopRegion = region;
   }
 
   function spawnDueNotes(songTime) {
@@ -243,13 +278,25 @@ const GameEngine = (() => {
   }
 
   // ------------------------------------------------------------------
-  // Input
+  // Input — keyboard and touch both funnel into handleLaneDown/Up,
+  // which operate on a lane index directly. Keyboard resolves a code
+  // to a lane first; touch already knows the lane (from which zone was
+  // tapped), so it skips the lookup entirely.
   // ------------------------------------------------------------------
   function handleKeyDown(code) {
     const lane = keymap.indexOf(code);
-    if (lane === -1 || heldLanes.has(lane)) return;
+    if (lane !== -1) handleLaneDown(lane);
+  }
+
+  function handleKeyUp(code) {
+    const lane = keymap.indexOf(code);
+    if (lane !== -1) handleLaneUp(lane);
+  }
+
+  function handleLaneDown(lane) {
+    if (lane < 0 || lane >= laneCount || heldLanes.has(lane)) return;
     heldLanes.add(lane);
-    setKeyIndicatorActive(code, true);
+    setKeyIndicatorActive(lane, true);
 
     const songTime = getSongTime();
     const note = findJudgeableNoteInLane(lane, songTime);
@@ -269,11 +316,10 @@ const GameEngine = (() => {
     }
   }
 
-  function handleKeyUp(code) {
-    const lane = keymap.indexOf(code);
-    if (lane === -1) return;
+  function handleLaneUp(lane) {
+    if (lane < 0 || lane >= laneCount) return;
     heldLanes.delete(lane);
-    setKeyIndicatorActive(code, false);
+    setKeyIndicatorActive(lane, false);
 
     const note = activeHolds.get(lane);
     if (!note) return;
@@ -307,8 +353,10 @@ const GameEngine = (() => {
     return "miss";
   }
 
-  function setKeyIndicatorActive(code, active) {
-    const el = elKeyRow.querySelector(`[data-code="${code}"]`);
+  // Indexes directly into elKeyRow's children (built in lane order by
+  // buildKeyIndicators), avoiding a second code→element lookup.
+  function setKeyIndicatorActive(lane, active) {
+    const el = elKeyRow.children[lane];
     if (el) el.classList.toggle("active", active);
   }
 
@@ -496,28 +544,51 @@ const GameEngine = (() => {
     return hitLineY - (noteTime - songTime) * pxPerSecond;
   }
 
-  // Stylized 6-petal flower, placeholder for note_tap.png per spec —
-  // swap fillFlowerSprite() in for an <img> draw once assets exist.
-  function drawFlower(x, y, color) {
+  // Pre-rendered sprite cache — the flower shape (with or without glow)
+  // is drawn to an offscreen canvas exactly once per distinct color,
+  // then every frame just does a cheap drawImage() instead of redoing
+  // the petal path + shadowBlur math 60 times a second per note. This
+  // was the single biggest contributor to mobile jitter: shadowBlur is
+  // costly on phone GPUs, and it was being recomputed for every visible
+  // note on every single frame.
+  const spriteCache = new Map();
+
+  function getFlowerSprite(color) {
+    const key = color + "|" + useGlow;
+    let sprite = spriteCache.get(key);
+    if (sprite) return sprite;
+
+    const pad = useGlow ? 20 : 6;
+    const size = NOTE_RADIUS * 2 + pad * 2;
+    sprite = document.createElement("canvas");
+    sprite.width = size;
+    sprite.height = size;
+    const sgfx = sprite.getContext("2d");
+    sgfx.translate(size / 2, size / 2);
+
     const petals = 6;
     const r = NOTE_RADIUS;
-    gfx.save();
-    gfx.translate(x, y);
-    gfx.shadowColor = color;
-    gfx.shadowBlur = 10;
+    if (useGlow) { sgfx.shadowColor = color; sgfx.shadowBlur = 10; }
     for (let i = 0; i < petals; i++) {
-      gfx.rotate((Math.PI * 2) / petals);
-      gfx.beginPath();
-      gfx.ellipse(0, -r * 0.55, r * 0.4, r * 0.55, 0, 0, Math.PI * 2);
-      gfx.fillStyle = color;
-      gfx.fill();
+      sgfx.rotate((Math.PI * 2) / petals);
+      sgfx.beginPath();
+      sgfx.ellipse(0, -r * 0.55, r * 0.4, r * 0.55, 0, 0, Math.PI * 2);
+      sgfx.fillStyle = color;
+      sgfx.fill();
     }
-    gfx.beginPath();
-    gfx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
-    gfx.fillStyle = "#ffe6d6";
-    gfx.shadowBlur = 4;
-    gfx.fill();
-    gfx.restore();
+    sgfx.beginPath();
+    sgfx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
+    sgfx.fillStyle = "#ffe6d6";
+    if (useGlow) sgfx.shadowBlur = 4;
+    sgfx.fill();
+
+    spriteCache.set(key, sprite);
+    return sprite;
+  }
+
+  function drawFlower(x, y, color) {
+    const sprite = getFlowerSprite(color);
+    gfx.drawImage(sprite, x - sprite.width / 2, y - sprite.height / 2);
   }
 
   function drawParticles() {
@@ -543,6 +614,9 @@ const GameEngine = (() => {
     setNoteSpeed,
     handleKeyDown,
     handleKeyUp,
+    handleLaneDown,
+    handleLaneUp,
+    setLoopRegion,
     resize,
   };
 })();

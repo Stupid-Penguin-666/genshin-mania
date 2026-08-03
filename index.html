@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Genshin Mania</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#16223a">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body>
 
@@ -13,6 +17,9 @@
        translucent neutral dark overlay so it shows through regardless
        of what image is picked (see .has-bg-image rules in style.css). -->
   <div id="bg-layer"></div>
+
+  <!-- Toast notifications — replaces blocking alert() popups -->
+  <div id="toast-container"></div>
 
   <!-- ============================================================
        APP ROOT — every screen lives here, only one is ever visible
@@ -34,6 +41,7 @@
           <button class="btn" data-action="go-calibration">Hiệu Chỉnh Độ Trễ</button>
           <button class="btn" data-action="go-editor">Beatmap Editor</button>
           <button class="btn" data-action="go-settings">Cài Đặt</button>
+          <button class="btn" data-action="go-help">Hướng Dẫn</button>
         </nav>
         <p class="uid-tag">UID: local-client</p>
       </div>
@@ -68,12 +76,85 @@
           <input type="file" id="song-beatmap-input" accept="application/json" hidden>
           <span id="upload-json-name" class="upload-filename">Không có — sẽ tự tạo nốt ngẫu nhiên</span>
         </div>
+        <div class="upload-row upload-row--autogen" id="upload-autogen-options">
+          <div class="editor-field">
+            <label>Chế Độ Tạo Nốt</label>
+            <select id="upload-genmode">
+              <option value="grid" selected>Beat Grid (BPM)</option>
+              <option value="onset">Audio Analysis (Onset)</option>
+            </select>
+          </div>
+          <div class="editor-field">
+            <label>BPM</label>
+            <input type="number" id="upload-bpm" min="40" max="300" value="120">
+          </div>
+          <div class="editor-field">
+            <label>Offset (ms)</label>
+            <input type="number" id="upload-offset" value="0" step="10">
+          </div>
+          <div class="editor-field">
+            <label>Loại Nốt</label>
+            <select id="upload-notetype">
+              <option value="mixed" selected>Tap & Hold</option>
+              <option value="tap">Chỉ Tap</option>
+              <option value="hold">Chỉ Hold</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Only shown when "Audio Analysis" is picked above. BPM/Offset
+             from the row above are still used — for Snap only, not for
+             placing notes directly. -->
+        <div class="upload-row upload-row--autogen" id="upload-onset-options" style="display:none;">
+          <div class="editor-field">
+            <label>Độ Nhạy</label>
+            <select id="upload-sensitivity">
+              <option value="low">Thấp</option>
+              <option value="medium" selected>Trung Bình</option>
+              <option value="high">Cao</option>
+            </select>
+          </div>
+          <div class="editor-field">
+            <label>Snap</label>
+            <select id="upload-snap">
+              <option value="0">Off</option>
+              <option value="4" selected>1/4</option>
+              <option value="8">1/8</option>
+              <option value="16">1/16</option>
+            </select>
+          </div>
+          <div class="editor-field">
+            <label>Khoảng Cách Tối Thiểu (ms)</label>
+            <input type="number" id="upload-mindist" min="30" max="1000" value="120">
+          </div>
+          <div class="editor-field">
+            <label>Số Nốt Tối Đa/Giây</label>
+            <input type="number" id="upload-maxrate" min="1" max="20" value="6">
+          </div>
+        </div>
+
+        <p class="settings-hint">
+          Các tuỳ chọn trên chỉ áp dụng khi <strong>không</strong> chọn Beatmap (.json) ở trên.
+          "Beat Grid" rải nốt đều theo lưới nhịp BPM. "Audio Analysis" quét waveform thật của bài
+          để tìm điểm nhạc nổi bật rồi đặt nốt đúng chỗ đó — bật Snap để nốt vẫn bám theo lưới BPM
+          cho dễ chơi, tắt Snap để giữ nguyên đúng thời điểm phát hiện được.
+        </p>
         <button class="btn btn--primary btn--small" id="btn-upload-confirm" disabled>Thêm Vào Thư Viện</button>
       </div>
 
       <div class="song-list" id="song-list">
         <!-- song cards injected by js/main.js -->
         <p class="empty-hint" id="song-list-empty">Chưa có bài hát nào. Bấm "+ Thêm Bài" để tải nhạc.</p>
+      </div>
+
+      <div class="practice-panel">
+        <label>
+          <input type="checkbox" id="practice-toggle">
+          Chế Độ Luyện Tập (lặp lại 1 đoạn)
+        </label>
+        <label>Từ giây <input type="number" id="practice-start" min="0" value="0" disabled></label>
+        <label>Đến giây <input type="number" id="practice-end" min="1" value="10" disabled></label>
+        <span id="practice-duration-hint"></span>
       </div>
 
       <footer class="song-actions">
@@ -226,8 +307,11 @@
             <option value="8">8K</option>
           </select>
         </div>
-        <div class="settings-row settings-row--keybinds" id="keybind-list">
-          <!-- rebind rows injected by js/main.js, one per lane -->
+        <div class="settings-row">
+          <label>Tùy Chỉnh Phím (bấm 1 nút rồi gõ phím mới)</label>
+          <div class="settings-row--keybinds" id="keybind-list">
+            <!-- rebind buttons injected by js/main.js, one per lane + a reset button -->
+          </div>
         </div>
         <div class="settings-row">
           <label>Nền Giao Diện</label>
@@ -238,6 +322,106 @@
             Chưa có ảnh nền nào — thêm ảnh vào thư mục images/ và khai báo trong images/catalog.json.
           </p>
         </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------
+         SCREEN: HELP — plain <details>/<summary> accordions, zero
+         JS needed for the expand/collapse behavior itself.
+         --------------------------------------------------------- -->
+    <section id="screen-help" class="screen">
+      <div class="bg-flame bg-flame--bottom"></div>
+      <header class="screen-header">
+        <button class="icon-btn" data-action="go-mainmenu">←</button>
+        <h2>Hướng Dẫn</h2>
+      </header>
+
+      <div class="help-content">
+        <details open>
+          <summary>Cách Chơi Cơ Bản</summary>
+          <p>
+            Nốt nhạc rơi từ trên xuống theo từng lane. Khi nốt chạm đúng vạch hit
+            (vòng tròn dưới cùng), nhấn đúng phím tương ứng với lane đó.
+          </p>
+          <ul>
+            <li><strong>Tap</strong> — nốt hoa đơn: bấm đúng lúc nốt chạm vạch.</li>
+            <li><strong>Hold</strong> — nốt có thanh dài: giữ phím từ lúc đầu nốt chạm vạch tới lúc đuôi nốt chạm vạch rồi mới thả.</li>
+            <li><strong>PERFECT</strong> — lệch trong ±45ms. <strong>GREAT</strong> — lệch trong ±90ms. Ngoài khoảng đó tính <strong>MISS</strong>.</li>
+            <li><strong>COMBO</strong> — số nốt liên tiếp không Miss. Miss 1 lần sẽ reset combo về 0, nhưng không bao giờ "thua" giữa chừng — chơi hết bài để nhận Rank (S/A/B/C) theo độ chính xác.</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Chọn Bài (Song Select)</summary>
+          <p>
+            Bấm "+ Thêm Bài" để tải nhạc lên (chỉ trên trình duyệt của bạn, không upload lên server nào).
+          </p>
+          <ul>
+            <li>Tải kèm file beatmap (.json) → chơi đúng theo bản chart đó, không tự tạo nốt nữa.</li>
+            <li>Chỉ tải file nhạc, không kèm .json → chọn 1 trong 2 <strong>Chế Độ Tạo Nốt</strong>:</li>
+          </ul>
+          <p><strong>Beat Grid (BPM)</strong> — rải nốt đều theo lưới nhịp, dùng BPM/Offset/Loại Nốt bạn nhập để tính vị trí.</p>
+          <p><strong>Audio Analysis (Onset)</strong> — quét waveform thật của bài, tìm những điểm âm lượng tăng đột ngột (tiếng trống, tiếng nhấn mạnh...) để đặt nốt đúng vào đó thay vì rải đều máy móc. Có thêm các tuỳ chỉnh riêng:</p>
+          <ul>
+            <li><strong>Độ Nhạy</strong> — Cao bắt nhiều điểm nhạc hơn (chart dày hơn), Thấp chỉ bắt điểm rõ nhất (chart thưa hơn).</li>
+            <li><strong>Snap</strong> — Off giữ nguyên đúng thời điểm phát hiện được; 1/4, 1/8, 1/16 sẽ kéo nốt về gần lưới nhịp BPM gần nhất để dễ chơi hơn (đúng nhịp hơn nhưng lệch nhẹ so với điểm nhạc thật).</li>
+            <li><strong>Khoảng Cách Tối Thiểu (ms)</strong> — 2 nốt liền nhau không được gần hơn khoảng này, tránh chart quá dồn dập ở đoạn nhạc dày.</li>
+            <li><strong>Số Nốt Tối Đa/Giây</strong> — giới hạn cứng mật độ nốt trong mỗi giây bất kỳ.</li>
+            <li>Nếu không phát hiện được điểm nhạc nào (bài quá êm hoặc cài đặt quá khắt khe), hệ thống tự động chuyển sang Beat Grid để không bao giờ ra chart rỗng.</li>
+          </ul>
+          <p>Loại Nốt (Tap/Hold/Mixed) áp dụng cho cả 2 chế độ như nhau.</p>
+          <ul>
+            <li>Mỗi bài có nhãn <strong>4K/6K/8K</strong> — nếu Key Mode trong Cài Đặt không khớp, hệ thống sẽ cảnh báo và cho đổi nhanh trước khi chơi.</li>
+            <li>Vì không có server lưu trữ, nhạc tự upload chỉ tồn tại trong phiên làm việc hiện tại — tải lại trang là mất, cần upload lại (nhấn "Xoá Danh Sách" để dọn sạch các bài không còn chơi được sau khi tải lại trang).</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Chế Độ Luyện Tập (Practice Mode)</summary>
+          <p>
+            Trong Song Select, tick "Chế Độ Luyện Tập" rồi nhập khoảng thời gian (giây) muốn lặp lại,
+            ví dụ đoạn khó từ giây 30 đến 45. Khi chơi, hết đoạn đó nhạc và nốt sẽ tự quay lại từ đầu đoạn,
+            lặp vô hạn cho tới khi bạn tạm dừng hoặc thoát — điểm/combo được reset mỗi vòng lặp để luyện sạch từng lần.
+          </p>
+        </details>
+
+        <details>
+          <summary>Hiệu Chỉnh Độ Trễ Âm Thanh</summary>
+          <p>
+            Thiết bị nào cũng có độ trễ nhỏ giữa lúc phát âm thanh và lúc bạn nghe thấy/bấm phím phản hồi lại.
+            Nếu chơi thấy bấm đúng nhịp mà toàn bị chấm trễ, vào đây tăng/giảm số ms thủ công (nghe cảm giác
+            thực tế lúc chơi để chỉnh, không cần công cụ đo tự động).
+          </p>
+        </details>
+
+        <details>
+          <summary>Cài Đặt</summary>
+          <ul>
+            <li><strong>Tốc Độ Rơi Nốt</strong> — chỉ đổi tốc độ nốt rơi trên màn hình, không đổi độ khó chấm điểm.</li>
+            <li><strong>Key Mode (4K/6K/8K)</strong> — số lane đang chơi.</li>
+            <li><strong>Tùy Chỉnh Phím</strong> — bấm vào ô phím muốn đổi rồi gõ phím mới trên bàn phím; không cho 2 lane trùng phím trong cùng Key Mode.</li>
+            <li><strong>Nền Giao Diện</strong> — chọn ảnh nền nếu người tạo web đã thêm ảnh vào thư viện.</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Beatmap Editor</summary>
+          <ul>
+            <li><strong>Manual Timeline</strong> — nhìn dạng sóng âm thanh, click vào đúng lane/thời điểm để đặt nốt Tap, kéo chuột để tạo nốt Hold. Click lại vào nốt đã đặt để xoá. Double-click vào timeline để tua nhạc tới đó.</li>
+            <li><strong>Live Recording</strong> — bấm Play rồi gõ phím theo nhịp thật, hệ thống tự ghi nốt đúng lúc bạn bấm.</li>
+            <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> để Undo/Redo thao tác đặt/xoá nốt gần nhất.</li>
+            <li><strong>Test Play</strong> — chơi thử ngay bản đang chỉnh bằng engine gameplay thật.</li>
+            <li><strong>Export JSON</strong> — tải beatmap.json về máy, kèm gợi ý đoạn khai báo để thêm vào danh sách bài Có Sẵn.</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Điều Khiển Trên Điện Thoại</summary>
+          <p>
+            Trên màn hình cảm ứng, chạm trực tiếp vào các ô phím (A/S/D...) hiển thị phía dưới màn chơi thay vì
+            dùng bàn phím. Giữ ngón tay trên ô đó để giữ nốt Hold, thả ra để nhả.
+          </p>
+        </details>
       </div>
     </section>
 
@@ -254,6 +438,8 @@
         <label class="btn btn--small" for="editor-file-input">+ Tải Nhạc</label>
         <input type="file" id="editor-file-input" accept="audio/mpeg,audio/mp3,audio/wav" hidden>
         <input type="file" id="editor-import-input" accept="application/json" hidden>
+        <button class="btn btn--small editor-history-btn" id="btn-editor-undo" title="Ctrl+Z" disabled>↶ Undo</button>
+        <button class="btn btn--small editor-history-btn" id="btn-editor-redo" title="Ctrl+Y" disabled>↷ Redo</button>
         <button class="btn btn--small" id="btn-editor-import">Import JSON</button>
         <button class="btn btn--small" id="btn-editor-export">Export JSON</button>
         <button class="btn btn--primary btn--small" id="btn-editor-testplay">▶ Test Play</button>

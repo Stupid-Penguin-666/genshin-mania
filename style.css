@@ -412,11 +412,26 @@ html, body {
   font-weight: 600;
   color: rgba(244,234,210,0.85);
   transition: background 0.08s, box-shadow 0.08s, border-color 0.08s;
+  /* The row above sets pointer-events: none so it doesn't block the
+     canvas; each indicator re-enables it individually so touch taps
+     land on the lane circles as designed. */
+  pointer-events: auto;
 }
 .key-indicator.active {
   background: rgba(255,224,163,0.25);
   border-color: var(--c-gold-bright);
   box-shadow: 0 0 20px rgba(255,224,163,0.75);
+}
+
+/* Touch devices: bigger hit target (fingers are far less precise than
+   a mouse cursor) and touch-action: none so a tap never triggers the
+   browser's own scroll/zoom/double-tap gestures on top of the game. */
+@media (pointer: coarse) {
+  .key-indicator {
+    width: 60px; height: 60px;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 /* Pause overlay */
@@ -500,6 +515,13 @@ html, body {
   padding: 8px 12px;
 }
 .settings-row--keybinds { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; }
+.keybind-btn { min-width: 56px; font-family: monospace; }
+.keybind-btn--listening {
+  background: rgba(255,138,61,0.25);
+  border-color: var(--c-flame-bright);
+  color: var(--c-flame-bright);
+  animation: rec-blink 1s infinite;
+}
 
 /* ==========================================================================
    EDITOR
@@ -637,6 +659,7 @@ html, body {
   background: rgba(22,34,58,0.5);
 }
 .upload-row { display: flex; align-items: center; gap: 14px; }
+.upload-row--autogen { gap: 16px 20px; align-items: flex-end; flex-wrap: wrap; }
 .upload-filename { font-size: 13px; color: rgba(244,234,210,0.6); }
 
 /* ==========================================================================
@@ -739,7 +762,119 @@ html, body {
 
 @media (max-width: 720px) {
   .brand__title { font-size: 34px; }
-  .key-indicator { width: 38px; height: 38px; font-size: 12px; }
   .judgement-text { font-size: 24px; }
   .result-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Coarse-pointer (touch) devices: drop the heavier backdrop-filter blur
+   — expensive on mobile GPUs/Safari in particular — while keeping the
+   same darkened-overlay look via the background color alone. */
+@media (pointer: coarse) {
+  .pause-overlay, .modal-overlay {
+    backdrop-filter: none;
+  }
+}
+
+/* ==========================================================================
+   TOAST NOTIFICATIONS — replaces blocking alert() popups
+   ========================================================================== */
+#toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  max-width: min(340px, calc(100vw - 40px));
+}
+.toast {
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(245,197,107,0.35);
+  background: var(--c-navy);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  font-size: 13px;
+  color: var(--c-cream);
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.toast--show { opacity: 1; transform: translateX(0); }
+.toast--error { border-color: rgba(230,90,90,0.5); }
+.toast--error::before { content: "⚠ "; }
+.toast--success { border-color: rgba(120,200,120,0.5); }
+.toast--success::before { content: "✓ "; }
+
+/* ==========================================================================
+   HELP / INSTRUCTIONS SCREEN
+   ========================================================================== */
+.help-content {
+  position: relative; z-index: 2;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 28px 32px;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+.help-content details {
+  border: 1px solid rgba(245,197,107,0.2);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  padding: 4px 18px;
+  background: rgba(22,34,58,0.4);
+}
+.help-content summary {
+  padding: 14px 0;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--c-gold-bright);
+  list-style: none;
+}
+.help-content summary::-webkit-details-marker { display: none; }
+.help-content summary::before { content: "▸ "; }
+.help-content details[open] summary::before { content: "▾ "; }
+.help-content p, .help-content li {
+  color: rgba(244,234,210,0.8);
+  line-height: 1.7;
+  font-size: 14px;
+}
+.help-content ul { padding: 0 0 16px 20px; }
+.help-content p { padding-bottom: 16px; }
+.help-content kbd {
+  background: rgba(245,197,107,0.15);
+  border: 1px solid rgba(245,197,107,0.4);
+  border-radius: 5px;
+  padding: 1px 7px;
+  font-family: monospace;
+}
+
+/* ==========================================================================
+   EDITOR UNDO/REDO
+   ========================================================================== */
+.editor-history-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ==========================================================================
+   PRACTICE MODE (Song Select footer)
+   ========================================================================== */
+.practice-panel {
+  position: relative; z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 28px 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: rgba(244,234,210,0.7);
+}
+.practice-panel input[type="number"] {
+  width: 70px;
+  background: rgba(22,34,58,0.6);
+  border: 1px solid rgba(245,197,107,0.3);
+  color: var(--c-cream);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.practice-panel label { display: flex; align-items: center; gap: 6px; }

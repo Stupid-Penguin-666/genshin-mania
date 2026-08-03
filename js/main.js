@@ -40,6 +40,27 @@
   });
 
   // ------------------------------------------------------------------
+  // TOAST NOTIFICATIONS — non-blocking replacement for alert(). Toasts
+  // stack (each manages its own timer independently) rather than
+  // replacing one another, so back-to-back errors don't get swallowed.
+  // ------------------------------------------------------------------
+  const toastContainer = document.getElementById("toast-container");
+  function showToast(message, type = "info", durationMs = 3500) {
+    const el = document.createElement("div");
+    el.className = `toast${type === "error" ? " toast--error" : type === "success" ? " toast--success" : ""}`;
+    el.textContent = message;
+    toastContainer.appendChild(el);
+    // rAF so the initial (pre-transition) state paints before adding
+    // the class that triggers the transition — otherwise the browser
+    // may coalesce both states into one frame and skip the animation.
+    requestAnimationFrame(() => el.classList.add("toast--show"));
+    setTimeout(() => {
+      el.classList.remove("toast--show");
+      setTimeout(() => el.remove(), 250); // matches the CSS transition duration
+    }, durationMs);
+  }
+
+  // ------------------------------------------------------------------
   // Persistence helpers
   // ------------------------------------------------------------------
   function loadState() {
@@ -140,6 +161,25 @@
     renderSongList();
   });
 
+  const uploadGenModeSelect = document.getElementById("upload-genmode");
+  const uploadBpmInput = document.getElementById("upload-bpm");
+  const uploadOffsetInput = document.getElementById("upload-offset");
+  const uploadNoteTypeSelect = document.getElementById("upload-notetype");
+  const uploadAutogenOptions = document.getElementById("upload-autogen-options");
+  const uploadOnsetOptions = document.getElementById("upload-onset-options");
+  const uploadSensitivitySelect = document.getElementById("upload-sensitivity");
+  const uploadSnapSelect = document.getElementById("upload-snap");
+  const uploadMinDistInput = document.getElementById("upload-mindist");
+  const uploadMaxRateInput = document.getElementById("upload-maxrate");
+
+  function updateAutogenVisibility() {
+    const hasJson = !!pendingBeatmapFile;
+    uploadAutogenOptions.style.display = hasJson ? "none" : "flex";
+    uploadOnsetOptions.style.display =
+      (!hasJson && uploadGenModeSelect.value === "onset") ? "flex" : "none";
+  }
+  uploadGenModeSelect.addEventListener("change", updateAutogenVisibility);
+
   fileInput.addEventListener("change", (e) => {
     pendingMp3File = e.target.files[0] || null;
     uploadMp3Name.textContent = pendingMp3File ? pendingMp3File.name : "Chưa chọn file";
@@ -151,6 +191,7 @@
     uploadJsonName.textContent = pendingBeatmapFile
       ? pendingBeatmapFile.name
       : "Không có — sẽ tự tạo nốt ngẫu nhiên";
+    updateAutogenVisibility();
   });
 
   // mp3 alone → placeholder chart auto-generated so it's still playable;
@@ -162,6 +203,8 @@
     const id = `upload_${Date.now()}`;
     const title = pendingMp3File.name.replace(/\.(mp3|wav)$/i, "");
     let laneCount;
+    const bpmVal = +uploadBpmInput.value || 120;
+    const offsetVal = +uploadOffsetInput.value || 0;
 
     if (pendingBeatmapFile) {
       try {
@@ -169,15 +212,40 @@
         state.currentBeatmap = JSON.parse(text);
         laneCount = state.currentBeatmap.laneCount || inferLaneCount(state.currentBeatmap.notes);
       } catch (err) {
-        alert("File beatmap.json không hợp lệ — dùng nốt tự động thay thế.");
-        state.currentBeatmap = generatePlaceholderBeatmap(AudioManager.getDuration());
+        showToast("File beatmap.json không hợp lệ — dùng nốt tự động thay thế.", "error");
         laneCount = state.settings.keyMode;
+        state.currentBeatmap = generatePlaceholderBeatmap(
+          AudioManager.getDuration(), bpmVal, uploadNoteTypeSelect.value, laneCount, offsetVal);
       }
     } else {
-      // No chart provided → auto-generated at whatever Key Mode is
-      // currently active in Settings, and tagged as such.
-      state.currentBeatmap = generatePlaceholderBeatmap(AudioManager.getDuration());
       laneCount = state.settings.keyMode;
+
+      if (uploadGenModeSelect.value === "onset") {
+        btnUploadConfirm.disabled = true;
+        const originalLabel = btnUploadConfirm.textContent;
+        btnUploadConfirm.textContent = "Đang phân tích âm thanh...";
+        try {
+          state.currentBeatmap = await generateOnsetBeatmap(
+            pendingMp3File, bpmVal, offsetVal, uploadNoteTypeSelect.value, laneCount,
+            uploadSensitivitySelect.value, +uploadSnapSelect.value,
+            +uploadMinDistInput.value || 120, +uploadMaxRateInput.value || 6);
+          if (!state.currentBeatmap.notes.length) {
+            showToast("Không phát hiện được điểm nhạc nào — dùng Beat Grid thay thế. Thử giảm Độ Nhạy hoặc Khoảng Cách Tối Thiểu.", "error");
+            state.currentBeatmap = generatePlaceholderBeatmap(
+              AudioManager.getDuration(), bpmVal, uploadNoteTypeSelect.value, laneCount, offsetVal);
+          }
+        } catch (err) {
+          console.error(err);
+          showToast("Phân tích âm thanh lỗi — dùng Beat Grid thay thế.", "error");
+          state.currentBeatmap = generatePlaceholderBeatmap(
+            AudioManager.getDuration(), bpmVal, uploadNoteTypeSelect.value, laneCount, offsetVal);
+        }
+        btnUploadConfirm.textContent = originalLabel;
+      } else {
+        // Beat Grid — unchanged algorithm from before.
+        state.currentBeatmap = generatePlaceholderBeatmap(
+          AudioManager.getDuration(), bpmVal, uploadNoteTypeSelect.value, laneCount, offsetVal);
+      }
     }
 
     state.library.unshift({ id, title, addedAt: Date.now(), source: "upload", laneCount });
@@ -193,6 +261,7 @@
     beatmapFileInput.value = "";
     uploadMp3Name.textContent = "Chưa chọn file";
     uploadJsonName.textContent = "Không có — sẽ tự tạo nốt ngẫu nhiên";
+    updateAutogenVisibility();
     btnUploadConfirm.disabled = true;
     uploadPanel.hidden = true;
 
@@ -264,6 +333,7 @@
       state.currentBeatmap = cached.beatmap;
       readySongId = song.id;
       btnStartSong.disabled = false;
+      updatePracticeDurationHint();
       return;
     }
 
@@ -296,24 +366,37 @@
   }
 
   // Fallback beatmap for freshly uploaded songs that don't have a
-  // matching .json yet. Tracks how long each lane stays "busy" from an
-  // active Hold note so a Tap is never dropped on top of one — doing so
-  // previously made that section un-hittable (Fixed per user report).
-  function generatePlaceholderBeatmap(durationSec, bpm = 120) {
+  // matching .json yet.
+  //   bpm       — difficulty (higher BPM = more beats/sec = denser chart)
+  //   noteType  — "tap" | "hold" | "mixed"
+  // Tracks how long each lane stays "busy" from an active Hold note so
+  // a Tap is never dropped on top of one (previously made that section
+  // un-hittable). Lead-in/out margin now scales with the clip's actual
+  // length instead of a fixed 2s each way — a fixed margin silently
+  // produced a completely empty chart for anything under ~4 seconds,
+  // which is what "auto-generate makes zero notes" turned out to be.
+  function generatePlaceholderBeatmap(durationSec, bpm, noteType, laneCount, offsetMs = 0) {
     const notes = [];
     const beatSec = 60 / bpm;
-    const laneCount = state.settings.keyMode;
     const laneBusyUntil = new Array(laneCount).fill(0);
 
-    for (let t = 2; t < durationSec - 2; t += beatSec) {
+    const margin = Math.min(2, Math.max(0, durationSec * 0.15));
+    const start = margin;
+    const end = Math.max(start + beatSec, durationSec - margin);
+
+    for (let t = start; t < end; t += beatSec) {
       if (Math.random() < 0.6) {
         const freeLanes = [];
         for (let l = 0; l < laneCount; l++) if (laneBusyUntil[l] <= t) freeLanes.push(l);
         if (!freeLanes.length) continue; // every lane still busy with a hold — skip this beat
         const lane = freeLanes[Math.floor(Math.random() * freeLanes.length)];
-        const isHold = Math.random() < 0.15;
-        if (isHold) {
-          const duration = beatSec * 2;
+
+        const useHold = noteType === "hold" ? true
+          : noteType === "tap" ? false
+          : Math.random() < 0.15; // "mixed" — mostly taps, occasional holds
+
+        if (useHold) {
+          const duration = beatSec * (1 + Math.floor(Math.random() * 2)); // 1–2 beats long
           notes.push({ time: t, lane, type: "hold", duration });
           laneBusyUntil[lane] = t + duration;
         } else {
@@ -321,7 +404,163 @@
         }
       }
     }
-    return { songTitle: "Placeholder", bpm, offset: 0, laneCount, notes };
+
+    // Safety net — a pathologically short clip (or an unlucky run of
+    // Math.random() misses) should never produce a totally empty chart.
+    if (!notes.length) {
+      notes.push({ time: Math.min(0.5, durationSec / 2), lane: 0, type: "tap" });
+    }
+
+    return { songTitle: "Auto-generated", bpm, offset: offsetMs, laneCount, notes };
+  }
+
+  // ==================================================================
+  // AUDIO ANALYSIS (Onset Detection) — a second, entirely independent
+  // chart-generation path. Does not call or modify generatePlaceholderBeatmap
+  // above in any way; Beat Grid stays exactly as it was.
+  //
+  // Pipeline: decode PCM → 25ms-frame RMS energy → flag frames where
+  // energy jumps sharply vs. the previous frame (an "onset") → enforce
+  // min-distance + max-notes/sec → optionally snap each onset to the
+  // nearest BPM grid line → assign lanes (round-robin, avoids repeating
+  // the same lane twice in a row and avoids lanes still busy holding).
+  // ==================================================================
+
+  const SENSITIVITY_THRESHOLD = { low: 0.35, medium: 0.2, high: 0.1 };
+
+  async function generateOnsetBeatmap(file, bpm, offsetMs, noteType, laneCount, sensitivity, snapDivisor, minDistanceMs, maxNotesPerSec) {
+    const onsetTimes = await detectOnsets(file, sensitivity, minDistanceMs, maxNotesPerSec);
+    const snappedTimes = snapDivisor
+      ? onsetTimes.map((t) => snapToGrid(t, bpm, offsetMs, snapDivisor))
+      : onsetTimes;
+    const notes = assignLanesToOnsets(snappedTimes, laneCount, noteType);
+    return { songTitle: "Audio Analysis", bpm, offset: offsetMs, laneCount, notes };
+  }
+
+  // Independent decode — mirrors the same technique the Beatmap Editor's
+  // waveform view already uses (its own short-lived AudioContext), kept
+  // separate on purpose so this feature can't accidentally affect that
+  // existing decode path.
+  async function detectOnsets(file, sensitivity, minDistanceMs, maxNotesPerSec) {
+    const arrayBuffer = await file.arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buffer = await ctx.decodeAudioData(arrayBuffer);
+    const raw = buffer.getChannelData(0);
+    const sr = buffer.sampleRate;
+    ctx.close();
+
+    const frameSec = 0.025; // 25ms frames per spec
+    const frameSize = Math.max(1, Math.floor(sr * frameSec));
+    const frameCount = Math.floor(raw.length / frameSize);
+
+    const rms = new Float32Array(frameCount);
+    for (let f = 0; f < frameCount; f++) {
+      let sum = 0;
+      const start = f * frameSize;
+      const end = start + frameSize;
+      for (let i = start; i < end; i++) sum += raw[i] * raw[i];
+      rms[f] = Math.sqrt(sum / frameSize);
+    }
+
+    const threshold = SENSITIVITY_THRESHOLD[sensitivity] ?? SENSITIVITY_THRESHOLD.medium;
+    const SILENCE_FLOOR = 0.02; // ignore jumps inside near-silent passages (noise, not real onsets)
+
+    const raw_onsets = [];
+    let lastOnsetTime = -Infinity;
+    for (let f = 1; f < frameCount; f++) {
+      const delta = rms[f] - rms[f - 1];
+      if (rms[f] < SILENCE_FLOOR) continue;
+      if (delta > threshold * (rms[f - 1] + 0.01)) {
+        const t = f * frameSec;
+        if ((t - lastOnsetTime) * 1000 >= minDistanceMs) {
+          raw_onsets.push(t);
+          lastOnsetTime = t;
+        }
+      }
+    }
+
+    // Enforce max notes/sec via a trailing 1-second window. Onset list
+    // is already time-ordered, so only look backward.
+    const accepted = [];
+    for (const t of raw_onsets) {
+      let windowCount = 0;
+      for (let i = accepted.length - 1; i >= 0 && t - accepted[i] < 1; i--) windowCount++;
+      if (windowCount < maxNotesPerSec) accepted.push(t);
+    }
+
+    return accepted;
+  }
+
+  function snapToGrid(t, bpm, offsetMs, snapDivisor) {
+    const beatSec = 60 / bpm;
+    const gridSec = beatSec / snapDivisor;
+    const offsetSec = offsetMs / 1000;
+    return Math.round((t - offsetSec) / gridSec) * gridSec + offsetSec;
+  }
+
+  // Round-robin lane assignment that (a) skips lanes still busy from an
+  // active Hold, and (b) avoids repeating the same lane twice in a row
+  // when a different lane is available — reduces awkward same-finger
+  // "jacks" that Beat Grid's pure-random pick can occasionally produce.
+  function assignLanesToOnsets(times, laneCount, noteType) {
+    const notes = [];
+    const laneBusyUntil = new Array(laneCount).fill(0);
+    let lastLane = -1;
+    let rrPointer = 0;
+
+    for (let i = 0; i < times.length; i++) {
+      const t = times[i];
+      const nextT = times[i + 1] ?? t + 1;
+
+      const freeLanes = [];
+      for (let l = 0; l < laneCount; l++) if (laneBusyUntil[l] <= t) freeLanes.push(l);
+      if (!freeLanes.length) continue; // every lane still busy holding — skip this onset
+
+      let pool = freeLanes.filter((l) => l !== lastLane);
+      if (!pool.length) pool = freeLanes; // only option left is a repeat — allow it
+
+      const lane = pool[rrPointer % pool.length];
+      rrPointer++;
+
+      const useHold = noteType === "hold" ? true
+        : noteType === "tap" ? false
+        : Math.random() < 0.15;
+
+      if (useHold) {
+        const gap = Math.max(0.15, nextT - t);
+        const duration = Math.min(gap * 0.7, 1.2);
+        notes.push({ time: t, lane, type: "hold", duration });
+        laneBusyUntil[lane] = t + duration;
+      } else {
+        notes.push({ time: t, lane, type: "tap" });
+      }
+      lastLane = lane;
+    }
+    return notes;
+  }
+
+  // ------------------------------------------------------------------
+  // PRACTICE MODE — loop a chosen [start, end] range of the currently
+  // selected song. Actual looping happens in GameEngine (setLoopRegion);
+  // this block only owns the Song Select UI for picking the range.
+  // ------------------------------------------------------------------
+  const practiceToggle = document.getElementById("practice-toggle");
+  const practiceStartInput = document.getElementById("practice-start");
+  const practiceEndInput = document.getElementById("practice-end");
+  const practiceDurationHint = document.getElementById("practice-duration-hint");
+
+  practiceToggle.addEventListener("change", () => {
+    practiceStartInput.disabled = !practiceToggle.checked;
+    practiceEndInput.disabled = !practiceToggle.checked;
+    updatePracticeDurationHint();
+  });
+
+  function updatePracticeDurationHint() {
+    if (!practiceToggle.checked) { practiceDurationHint.textContent = ""; return; }
+    const duration = AudioManager.getDuration();
+    practiceDurationHint.textContent = duration
+      ? `(bài dài ${duration.toFixed(1)}s)`
+      : "(chọn 1 bài trước)";
   }
 
   // ------------------------------------------------------------------
@@ -401,6 +640,25 @@
   let gameplayInitialized = false;
 
   function startGameplay() {
+    // Practice Mode validation happens before switching screens — an
+    // invalid range should never silently fall back to normal play,
+    // the player would be confused why looping isn't happening.
+    const practiceOn = practiceToggle.checked;
+    let loopStart = 0, loopEnd = 0;
+    if (practiceOn) {
+      loopStart = Math.max(0, +practiceStartInput.value || 0);
+      loopEnd = +practiceEndInput.value || 0;
+      const duration = AudioManager.getDuration();
+      if (!(loopEnd > loopStart)) {
+        showToast("Luyện Tập: giây kết thúc phải lớn hơn giây bắt đầu.", "error");
+        return;
+      }
+      if (duration && loopEnd > duration) {
+        showToast(`Luyện Tập: bài chỉ dài ${duration.toFixed(1)}s, giây kết thúc vượt quá độ dài bài.`, "error");
+        return;
+      }
+    }
+
     goScreen("screen-gameplay");
     AudioManager.ensureContext();
     AudioManager.setVolume(state.settings.musicVolume);
@@ -408,11 +666,12 @@
     if (!gameplayInitialized) {
       GameEngine.init(canvas, {
         laneCount: state.settings.keyMode,
-        keymap: GameEngine.KEYMAPS[state.settings.keyMode],
+        keymap: getKeymapFor(state.settings.keyMode),
         noteSpeed: state.settings.noteSpeed,
         getSongTime: AudioManager.getSongTime,
         onFinish: handleSongFinish,
       });
+      bindTouchControls(); // key indicators only exist after the first init()
       gameplayInitialized = true;
     } else {
       GameEngine.setNoteSpeed(state.settings.noteSpeed);
@@ -423,8 +682,36 @@
       combinedSongList().find((s) => s.id === state.selectedSongId)?.title || "—";
 
     GameEngine.loadBeatmap(state.currentBeatmap);
-    AudioManager.play(0);
+
+    // Always set/clear the loop region explicitly — GameEngine keeps
+    // this as module state, so a stale region from a previous Practice
+    // Mode session would otherwise silently leak into normal play.
+    GameEngine.setLoopRegion(practiceOn
+      ? { start: loopStart, end: loopEnd, onLoop: () => AudioManager.play(loopStart) }
+      : null);
+
+    AudioManager.play(practiceOn ? loopStart : 0);
     GameEngine.start();
+  }
+
+  // Touch zones reuse the exact same .key-indicator elements the
+  // keyboard path highlights — one listener set per element, bound
+  // once (elements persist across replays; only rebuilt if key mode
+  // changes, which re-runs GameEngine.init → re-triggers this via the
+  // !gameplayInitialized branch above).
+  function bindTouchControls() {
+    const indicators = document.querySelectorAll("#key-row .key-indicator");
+    indicators.forEach((el, lane) => {
+      el.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        GameEngine.handleLaneDown(lane);
+      }, { passive: false });
+      el.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        GameEngine.handleLaneUp(lane);
+      }, { passive: false });
+      el.addEventListener("touchcancel", () => GameEngine.handleLaneUp(lane));
+    });
   }
 
   function handleSongFinish(stats) {
@@ -492,6 +779,7 @@
     settingSfxVol.value = state.settings.sfxVolume;
     settingNoteSpeed.value = state.settings.noteSpeed;
     settingKeymode.value = state.settings.keyMode;
+    renderKeybindList();
   }
 
   settingMusicVol.addEventListener("input", (e) => {
@@ -514,7 +802,106 @@
     // Key mode changes require re-initializing the engine's lane layout
     // next time gameplay starts.
     gameplayInitialized = false;
+    renderKeybindList();
   });
+
+  // ------------------------------------------------------------------
+  // CUSTOM KEYBINDS — per key mode (4K/6K/8K each keep their own
+  // mapping). Stored separately from `state.settings` under its own
+  // localStorage key so GameEngine and Editor can both read it directly
+  // without needing to import main.js's internal state.
+  // ------------------------------------------------------------------
+  const STORAGE_KEYMAPS = "tant_keymaps"; // { "4": [...4 codes], "6": [...], "8": [...] }
+  const keybindListEl = document.getElementById("keybind-list");
+  let rebindCleanup = null; // active keydown listener while "listening" for a new key
+
+  function getCustomKeymaps() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYMAPS) || "{}"); }
+    catch { return {}; }
+  }
+
+  // Single source of truth for "what key plays lane i in this key
+  // mode" — falls back to GameEngine's default KEYMAPS whenever no
+  // valid custom mapping exists (missing, wrong length, etc.).
+  function getKeymapFor(laneCount) {
+    const custom = getCustomKeymaps();
+    const saved = custom[laneCount];
+    return (Array.isArray(saved) && saved.length === laneCount) ? saved : GameEngine.KEYMAPS[laneCount];
+  }
+
+  function codeToLabel(code) {
+    return code.replace("Key", "").replace("Digit", "").replace("Semicolon", ";");
+  }
+
+  function renderKeybindList() {
+    if (rebindCleanup) { rebindCleanup(); rebindCleanup = null; } // cancel any in-progress rebind
+    const laneCount = state.settings.keyMode;
+    const keymap = getKeymapFor(laneCount);
+    keybindListEl.innerHTML = "";
+
+    keymap.forEach((code, laneIndex) => {
+      const btn = document.createElement("button");
+      btn.className = "btn btn--small keybind-btn";
+      btn.textContent = codeToLabel(code);
+      btn.addEventListener("click", () => startRebind(laneCount, laneIndex, btn));
+      keybindListEl.appendChild(btn);
+    });
+
+    const resetBtn = document.createElement("button");
+    resetBtn.className = "btn btn--small";
+    resetBtn.textContent = "Đặt Lại Mặc Định";
+    resetBtn.addEventListener("click", () => {
+      const custom = getCustomKeymaps();
+      delete custom[laneCount];
+      localStorage.setItem(STORAGE_KEYMAPS, JSON.stringify(custom));
+      gameplayInitialized = false;
+      renderKeybindList();
+    });
+    keybindListEl.appendChild(resetBtn);
+  }
+
+  function startRebind(laneCount, laneIndex, btn) {
+    if (rebindCleanup) rebindCleanup(); // only one rebind listener active at a time
+
+    const originalLabel = btn.textContent;
+    btn.textContent = "Nhấn phím...";
+    btn.classList.add("keybind-btn--listening");
+
+    const handler = (e) => {
+      e.preventDefault();
+      cleanup();
+
+      if (e.code === "Escape") return; // cancel, keep old binding
+
+      const current = [...getKeymapFor(laneCount)];
+      const clashIndex = current.indexOf(e.code);
+      if (clashIndex !== -1 && clashIndex !== laneIndex) {
+        showToast(`Phím "${codeToLabel(e.code)}" đang được dùng cho lane khác trong chế độ ${laneCount}K — chọn phím khác.`, "error");
+        renderKeybindList();
+        return;
+      }
+
+      current[laneIndex] = e.code;
+      const custom = getCustomKeymaps();
+      custom[laneCount] = current;
+      localStorage.setItem(STORAGE_KEYMAPS, JSON.stringify(custom));
+      // Force GameEngine/Editor to pick up the new mapping next time
+      // they (re)initialize rather than keep using an already-bound keymap.
+      gameplayInitialized = false;
+      renderKeybindList();
+    };
+
+    function cleanup() {
+      document.removeEventListener("keydown", handler, true);
+      btn.classList.remove("keybind-btn--listening");
+      rebindCleanup = null;
+    }
+
+    rebindCleanup = () => { btn.textContent = originalLabel; cleanup(); };
+    document.addEventListener("keydown", handler, true); // capture phase: intercept before any other handler
+  }
+
+  document.querySelector('[data-action="go-settings"]')?.addEventListener("click", renderKeybindList);
 
   // ------------------------------------------------------------------
   // BACKGROUND — images/catalog.json lists whatever images the site

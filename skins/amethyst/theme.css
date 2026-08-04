@@ -1,0 +1,12 @@
+/* Amethyst skin — overrides the UI accent color variables from style.css.
+   Loaded as an extra <link> AFTER style.css, so these values win via
+   normal CSS cascade order without touching style.css itself. */
+:root {
+  --c-gold: #b57bff;
+  --c-gold-bright: #d9b3ff;
+  --c-flame: #8a4fd6;
+  --c-flame-bright: #b57bff;
+  --c-flame-dark: #2a1140;
+  --glow-gold: 0 0 12px rgba(181, 123, 255, 0.55);
+  --glow-flame: 0 0 18px rgba(138, 79, 214, 0.65);
+}

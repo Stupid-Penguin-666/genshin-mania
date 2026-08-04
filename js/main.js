@@ -730,61 +730,39 @@
   }
 
   // Touch zones reuse the exact same .key-indicator elements the
-  // keyboard path highlights — one listener set per element, bound
-  // once (elements persist across replays; only rebuilt if key mode
-  // changes, which re-runs GameEngine.init → re-triggers this via the
-  // !gameplayInitialized branch above).
-  function bindTouchControls() {
-    const indicators = document.querySelectorAll("#key-row .key-indicator");
-    indicators.forEach((el, lane) => {
-      el.addEventListener("touchstart", (e) => {
-        e.preventDefault();
-        GameEngine.handleLaneDown(lane);
-      }, { passive: false });
-      el.addEventListener("touchend", (e) => {
-        e.preventDefault();
-        GameEngine.handleLaneUp(lane);
-      }, { passive: false });
-      el.addEventListener("touchcancel", () => GameEngine.handleLaneUp(lane));
-    });
+  // Keyboard â†’ engine input (only while gameplay screen is active).
+  // `code` is a physical-key identifier, so Unikey/IME input never changes
+  // which lane is pressed. Capture phase lets the game handle its keys before
+  // any page-level shortcut or text-input behavior.
+  function isGameplayScreenActive() {
+    return document.getElementById("screen-gameplay").classList.contains("screen--active");
   }
 
-  function handleSongFinish(stats) {
-    AudioManager.stop();
-    // Autoplay always scores a perfect run — saving that as a "high
-    // score" would silently corrupt the player's real best with a fake
-    // one every single time autoplay is used.
-    if (state.selectedSongId && !lastRunWasAutoplay) setHighScore(state.selectedSongId, stats);
-
-    document.getElementById("result-rank").textContent = stats.rank;
-    const songTitle = combinedSongList().find((s) => s.id === state.selectedSongId)?.title || "—";
-    document.getElementById("result-song-title").textContent =
-      lastRunWasAutoplay ? `${songTitle} (Autoplay)` : songTitle;
-    document.getElementById("result-perfect").textContent = stats.perfect;
-    document.getElementById("result-great").textContent = stats.great;
-    document.getElementById("result-miss").textContent = stats.miss;
-    document.getElementById("result-maxcombo").textContent = stats.maxCombo;
-    document.getElementById("result-accuracy").textContent = `${stats.accuracy.toFixed(1)}%`;
-    document.getElementById("result-score").textContent = stats.score;
-
-    goScreen("screen-result");
-  }
-
-  document.getElementById("btn-retry").addEventListener("click", startGameplay);
-
-  // Keyboard → engine input (only while gameplay screen is active)
   document.addEventListener("keydown", (e) => {
-    if (!document.getElementById("screen-gameplay").classList.contains("screen--active")) return;
-    if (e.repeat) return;
-    if (e.code === "Escape") { togglePause(true); return; }
-    GameEngine.handleKeyDown(e.code);
-  });
-  document.addEventListener("keyup", (e) => {
-    if (!document.getElementById("screen-gameplay").classList.contains("screen--active")) return;
-    GameEngine.handleKeyUp(e.code);
-  });
+    if (!isGameplayScreenActive()) return;
 
-  // Pause menu
+    const isPauseKey = e.code === "Escape";
+    if (!isPauseKey && !GameEngine.hasKeyCode(e.code)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat) return;
+
+    if (isPauseKey) {
+      togglePause(true);
+      return;
+    }
+
+    GameEngine.handleKeyDown(e.code);
+  }, true);
+
+  document.addEventListener("keyup", (e) => {
+    if (!isGameplayScreenActive() || !GameEngine.hasKeyCode(e.code)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    GameEngine.handleKeyUp(e.code);
+  }, true);  // Pause menu
   function togglePause(show) {
     pauseOverlay.classList.toggle("show", show);
     if (show) { AudioManager.pause(); GameEngine.stop(); }

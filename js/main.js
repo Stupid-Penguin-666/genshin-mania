@@ -498,29 +498,56 @@
     return Math.round((t - offsetSec) / gridSec) * gridSec + offsetSec;
   }
 
-  // Round-robin lane assignment that (a) skips lanes still busy from an
-  // active Hold, and (b) avoids repeating the same lane twice in a row
-  // when a different lane is available — reduces awkward same-finger
-  // "jacks" that Beat Grid's pure-random pick can occasionally produce.
+  // Shuffle-bag lane assignment — guarantees every lane gets picked
+  // exactly once per full cycle through the bag (fair distribution,
+  // no lane silently starved), while the shuffle order still keeps it
+  // feeling natural rather than a rigid 0→1→2→... sequence. Busy-hold
+  // lanes and immediate same-lane repeats are deferred by pushing them
+  // to the back of the *same* bag and trying the next one — not by
+  // filtering into a new array, which is what caused the original bug:
+  // filtering re-indexes the array, so a fixed `pointer % length` no
+  // longer points at the lane it's supposed to, and one lane ends up
+  // never selected.
   function assignLanesToOnsets(times, laneCount, noteType) {
     const notes = [];
     const laneBusyUntil = new Array(laneCount).fill(0);
     let lastLane = -1;
-    let rrPointer = 0;
+    let bag = [];
+
+    function refillBag() {
+      bag = Array.from({ length: laneCount }, (_, i) => i);
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+    }
+    refillBag();
 
     for (let i = 0; i < times.length; i++) {
       const t = times[i];
       const nextT = times[i + 1] ?? t + 1;
 
-      const freeLanes = [];
-      for (let l = 0; l < laneCount; l++) if (laneBusyUntil[l] <= t) freeLanes.push(l);
-      if (!freeLanes.length) continue; // every lane still busy holding — skip this onset
+      let lane = null;
+      const maxAttempts = laneCount * 4 + 8; // generous bound, just guards against a pathological loop
+      for (let attempt = 0; attempt < maxAttempts && lane === null; attempt++) {
+        if (bag.length === 0) refillBag();
+        const candidate = bag.shift();
 
-      let pool = freeLanes.filter((l) => l !== lastLane);
-      if (!pool.length) pool = freeLanes; // only option left is a repeat — allow it
-
-      const lane = pool[rrPointer % pool.length];
-      rrPointer++;
+        if (laneBusyUntil[candidate] > t) {
+          bag.push(candidate); // still holding — try again later, don't drop it
+          continue;
+        }
+        // Defer an immediate repeat only if a different free lane is
+        // still available in the bag; otherwise a repeat is the only
+        // option and gets accepted rather than looping forever.
+        const otherFreeExists = bag.some((l) => laneBusyUntil[l] <= t);
+        if (candidate === lastLane && otherFreeExists) {
+          bag.push(candidate);
+          continue;
+        }
+        lane = candidate;
+      }
+      if (lane === null) continue; // every lane busy holding — skip this onset entirely
 
       const useHold = noteType === "hold" ? true
         : noteType === "tap" ? false
@@ -545,6 +572,7 @@
   // this block only owns the Song Select UI for picking the range.
   // ------------------------------------------------------------------
   const practiceToggle = document.getElementById("practice-toggle");
+  const autoplayToggle = document.getElementById("autoplay-toggle");
   const practiceStartInput = document.getElementById("practice-start");
   const practiceEndInput = document.getElementById("practice-end");
   const practiceDurationHint = document.getElementById("practice-duration-hint");
@@ -639,6 +667,8 @@
   const pauseOverlay = document.getElementById("pause-overlay");
   let gameplayInitialized = false;
 
+  let lastRunWasAutoplay = false;
+
   function startGameplay() {
     // Practice Mode validation happens before switching screens — an
     // invalid range should never silently fall back to normal play,
@@ -658,6 +688,9 @@
         return;
       }
     }
+
+    const autoplayOn = autoplayToggle.checked;
+    lastRunWasAutoplay = autoplayOn;
 
     goScreen("screen-gameplay");
     AudioManager.ensureContext();
@@ -682,6 +715,8 @@
       combinedSongList().find((s) => s.id === state.selectedSongId)?.title || "—";
 
     GameEngine.loadBeatmap(state.currentBeatmap);
+    GameEngine.setAutoplay(autoplayOn);
+    if (currentSkin) GameEngine.applySkin(currentSkin);
 
     // Always set/clear the loop region explicitly — GameEngine keeps
     // this as module state, so a stale region from a previous Practice
@@ -716,11 +751,15 @@
 
   function handleSongFinish(stats) {
     AudioManager.stop();
-    if (state.selectedSongId) setHighScore(state.selectedSongId, stats);
+    // Autoplay always scores a perfect run — saving that as a "high
+    // score" would silently corrupt the player's real best with a fake
+    // one every single time autoplay is used.
+    if (state.selectedSongId && !lastRunWasAutoplay) setHighScore(state.selectedSongId, stats);
 
     document.getElementById("result-rank").textContent = stats.rank;
+    const songTitle = combinedSongList().find((s) => s.id === state.selectedSongId)?.title || "—";
     document.getElementById("result-song-title").textContent =
-      combinedSongList().find((s) => s.id === state.selectedSongId)?.title || "—";
+      lastRunWasAutoplay ? `${songTitle} (Autoplay)` : songTitle;
     document.getElementById("result-perfect").textContent = stats.perfect;
     document.getElementById("result-great").textContent = stats.great;
     document.getElementById("result-miss").textContent = stats.miss;
@@ -975,11 +1014,93 @@
   }
 
   // ------------------------------------------------------------------
+  // SKIN — same catalog pattern as songs/backgrounds. Each entry
+  // configures note shape/color for GameEngine (applySkin) and,
+  // optionally, a small CSS file that retints the general UI accent
+  // colors (buttons, glow, headers) via CSS custom properties.
+  // ------------------------------------------------------------------
+  const SKIN_CATALOG_URL = "skins/catalog.json";
+  const STORAGE_SKIN = "tant_skin_id";
+  let skinCatalog = [];
+  let currentSkin = null; // the applied skin's full config object
+  const skinPickerGrid = document.getElementById("skin-picker-grid");
+  let skinThemeLinkEl = null; // created/removed dynamically, not a static <link> in index.html
+
+  async function loadSkinCatalog() {
+    try {
+      const res = await fetch(SKIN_CATALOG_URL);
+      if (res.ok) skinCatalog = await res.json();
+    } catch (err) {
+      console.warn("Không tải được danh sách skin:", err);
+    }
+    if (!skinCatalog.length) {
+      // Hard fallback so the game never has zero skins even if the
+      // catalog file is missing/broken — matches GameEngine's own
+      // built-in defaults exactly.
+      skinCatalog = [{ id: "default", name: "Mặc Định", noteShape: "flower",
+        noteColor: "#ff9f6b", noteColorActive: "#ffe6d6", noteCenterColor: "#ffe6d6",
+        holdColor: "#ff8a3d", particleColor: "#ffd76b", cssFile: null, default: true }];
+    }
+
+    const savedId = localStorage.getItem(STORAGE_SKIN);
+    const chosen = skinCatalog.find((s) => s.id === savedId)
+      || skinCatalog.find((s) => s.default)
+      || skinCatalog[0];
+    applySkinChoice(chosen);
+  }
+
+  function applySkinChoice(skin) {
+    currentSkin = skin;
+
+    if (skin.cssFile) {
+      if (!skinThemeLinkEl) {
+        skinThemeLinkEl = document.createElement("link");
+        skinThemeLinkEl.rel = "stylesheet";
+        skinThemeLinkEl.id = "skin-theme-link";
+        document.head.appendChild(skinThemeLinkEl);
+      }
+      skinThemeLinkEl.href = skin.cssFile;
+    } else if (skinThemeLinkEl) {
+      skinThemeLinkEl.href = ""; // no theme override for this skin — clears the previous one
+    }
+
+    // Only affects the *next* GameEngine.start() call — see startGameplay(),
+    // which calls GameEngine.applySkin(currentSkin) every time it runs.
+    // If gameplay is already initialized and currently visible (e.g.
+    // switching skins from the pause menu isn't wired up, but Settings
+    // reachable mid-song via other means shouldn't silently no-op),
+    // applying immediately is harmless — GameEngine.applySkin() itself
+    // is safe to call at any time.
+    if (gameplayInitialized) GameEngine.applySkin(skin);
+
+    renderSkinPicker();
+  }
+
+  function renderSkinPicker() {
+    skinPickerGrid.innerHTML = "";
+    skinCatalog.forEach((skin) => {
+      const card = document.createElement("div");
+      card.className = "skin-picker-card" + (currentSkin?.id === skin.id ? " skin-picker-card--selected" : "");
+      const shapeClass = `skin-swatch--${skin.noteShape || "flower"}`;
+      card.innerHTML = `
+        <div class="skin-swatch ${shapeClass}" style="background:${skin.noteColor || "#ff9f6b"}"></div>
+        <span>${escapeHtml(skin.name || skin.id)}</span>
+      `;
+      card.addEventListener("click", () => {
+        localStorage.setItem(STORAGE_SKIN, skin.id);
+        applySkinChoice(skin);
+      });
+      skinPickerGrid.appendChild(card);
+    });
+  }
+
+  // ------------------------------------------------------------------
   // Boot
   // ------------------------------------------------------------------
   loadState();
   loadCatalog();
   loadBackgroundCatalog();
+  loadSkinCatalog();
   initSettingsUI();
   Editor.init();
 })();

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "default",
+    "name": "Mặc Định",
+    "noteShape": "flower",
+    "noteColor": "#ff9f6b",
+    "noteColorActive": "#ffe6d6",
+    "noteCenterColor": "#ffe6d6",
+    "holdColor": "#ff8a3d",
+    "particleColor": "#ffd76b",
+    "cssFile": null,
+    "default": true
+  },
+  {
+    "id": "ocean",
+    "name": "Ocean (Ví Dụ)",
+    "noteShape": "circle",
+    "noteColor": "#5ac8fa",
+    "noteColorActive": "#d6f4ff",
+    "noteCenterColor": "#eafcff",
+    "holdColor": "#2ea6d6",
+    "particleColor": "#8fe3ff",
+    "cssFile": "skins/ocean/theme.css",
+    "default": false
+  },
+  {
+    "id": "amethyst",
+    "name": "Amethyst (Ví Dụ)",
+    "noteShape": "diamond",
+    "noteColor": "#b57bff",
+    "noteColorActive": "#ecdcff",
+    "noteCenterColor": "#f5ecff",
+    "holdColor": "#8a4fd6",
+    "particleColor": "#d9b3ff",
+    "cssFile": "skins/amethyst/theme.css",
+    "default": false
+  }
+]

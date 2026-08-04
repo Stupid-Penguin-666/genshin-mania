@@ -30,7 +30,7 @@
   --glow-flame:       0 0 18px rgba(217, 79, 30, 0.65);
 
   --font-display: "Cormorant Garamond", "Songti SC", "Noto Serif", Georgia, serif;
-  --font-body:    "Segoe UI", "Noto Sans", system-ui, sans-serif;
+  --font-body:    "Nunito", "Segoe UI", "Noto Sans", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -381,6 +381,25 @@ html, body {
 .judgement-text.judgement-great   { color: var(--c-great);   text-shadow: 0 0 14px rgba(255,171,107,0.7); }
 .judgement-text.judgement-miss    { color: var(--c-miss);    text-shadow: none; }
 
+/* Persistent watermark — stays visible the entire time Autoplay is on,
+   not a fade-in/out toast, so it can never be mistaken for a real play. */
+#autoplay-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  font-family: var(--font-display);
+  font-size: 15vw;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: rgba(255, 224, 163, 0.14);
+  pointer-events: none;
+  white-space: nowrap;
+  user-select: none;
+}
+#autoplay-watermark[hidden] { display: none; }
+
 /* Key indicator row — mirrors the lanes rendered on canvas beneath it */
 /* Key indicator row — each .key-indicator gets its `left` set in px by
    engine.js (positionKeyIndicators), taken directly from the same
@@ -702,6 +721,35 @@ html, body {
   background: rgba(13,22,38,0.6);
 }
 .bg-picker-thumb--selected { border-color: var(--c-gold); box-shadow: var(--glow-gold); }
+
+.skin-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+.skin-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  border-radius: 10px;
+  border: 2px solid rgba(245,197,107,0.25);
+  background: rgba(13,22,38,0.4);
+  cursor: pointer;
+}
+.skin-picker-card--selected { border-color: var(--c-gold); box-shadow: var(--glow-gold); }
+.skin-swatch {
+  width: 34px; height: 34px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.35);
+}
+.skin-swatch--flower {
+  clip-path: polygon(50% 0%, 65% 35%, 100% 50%, 65% 65%, 50% 100%, 35% 65%, 0% 50%, 35% 35%);
+  border-radius: 50%;
+}
+.skin-swatch--circle { border-radius: 50%; }
+.skin-swatch--diamond { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.skin-picker-card span { font-size: 11px; color: rgba(244,234,210,0.75); text-align: center; }
 
 /* ==========================================================================
    MODAL — generic overlay dialog (currently used for the Key Mode

@@ -393,6 +393,13 @@ const GameEngine = (() => {
     if (lane !== -1) handleLaneUp(lane);
   }
 
+  // `KeyboardEvent.code` identifies the physical key and is therefore
+  // independent from the active keyboard layout or Vietnamese IME/Unikey.
+  // main.js uses this to intercept only keys that belong to the current map.
+  function hasKeyCode(code) {
+    return keymap.includes(code);
+  }
+
   function handleLaneDown(lane) {
     if (autoplay) return; // autoplay judges every note itself — real input is ignored to avoid double-judging
     if (lane < 0 || lane >= laneCount || heldLanes.has(lane)) return;
@@ -746,6 +753,7 @@ const GameEngine = (() => {
     setNoteSpeed,
     handleKeyDown,
     handleKeyUp,
+    hasKeyCode,
     handleLaneDown,
     handleLaneUp,
     setLoopRegion,

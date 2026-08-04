@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Genshin Mania</title>
 <link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#16223a">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -156,6 +159,12 @@
         <label>Đến giây <input type="number" id="practice-end" min="1" value="10" disabled></label>
         <span id="practice-duration-hint"></span>
       </div>
+      <div class="practice-panel">
+        <label>
+          <input type="checkbox" id="autoplay-toggle">
+          Chế Độ Autoplay (xem chart tự động chạy — không tính Điểm Cao)
+        </label>
+      </div>
 
       <footer class="song-actions">
         <div class="high-score" id="song-highscore"></div>
@@ -231,6 +240,8 @@
       <!-- Judgement text ("Hoàn Mỹ" / "PERFECT" etc.) pops up here,
            positioned above the hit line by engine.js -->
       <div class="judgement-text" id="judgement-text"></div>
+
+      <div id="autoplay-watermark" hidden>AUTOPLAY</div>
 
       <!-- Key indicator row, mirrors the lanes drawn on canvas -->
       <div class="key-row" id="key-row">
@@ -322,6 +333,12 @@
             Chưa có ảnh nền nào — thêm ảnh vào thư mục images/ và khai báo trong images/catalog.json.
           </p>
         </div>
+        <div class="settings-row">
+          <label>Skin (Hình Dạng &amp; Màu Nốt)</label>
+          <div class="skin-picker-grid" id="skin-picker-grid">
+            <!-- cards injected by js/main.js from skins/catalog.json -->
+          </div>
+        </div>
       </div>
     </section>
 
@@ -386,6 +403,17 @@
         </details>
 
         <details>
+          <summary>Chế Độ Autoplay</summary>
+          <p>
+            Tick "Chế Độ Autoplay" ở Song Select để xem bot tự chơi toàn bộ bài — mọi nốt luôn được
+            bấm/giữ/thả đúng thời điểm tuyệt đối (luôn PERFECT). Hữu ích để xem trước 1 chart trông
+            như thế nào trước khi tự chơi thật. Chữ <strong>AUTOPLAY</strong> hiện xuyên suốt màn hình
+            lúc đang bật, và màn Kết Quả cũng ghi rõ "(Autoplay)" — kết quả này <strong>không</strong>
+            được tính vào Điểm Cao thật của bạn.
+          </p>
+        </details>
+
+        <details>
           <summary>Hiệu Chỉnh Độ Trễ Âm Thanh</summary>
           <p>
             Thiết bị nào cũng có độ trễ nhỏ giữa lúc phát âm thanh và lúc bạn nghe thấy/bấm phím phản hồi lại.
@@ -401,6 +429,7 @@
             <li><strong>Key Mode (4K/6K/8K)</strong> — số lane đang chơi.</li>
             <li><strong>Tùy Chỉnh Phím</strong> — bấm vào ô phím muốn đổi rồi gõ phím mới trên bàn phím; không cho 2 lane trùng phím trong cùng Key Mode.</li>
             <li><strong>Nền Giao Diện</strong> — chọn ảnh nền nếu người tạo web đã thêm ảnh vào thư viện.</li>
+            <li><strong>Skin</strong> — đổi hình dạng và màu nốt (hoa/tròn/kim cương...), có skin còn đổi luôn màu chủ đạo giao diện. Nền và Skin hoàn toàn độc lập, kết hợp tuỳ ý.</li>
           </ul>
         </details>
 

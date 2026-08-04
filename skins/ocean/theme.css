@@ -1,0 +1,12 @@
+/* Ocean skin — overrides the UI accent color variables from style.css.
+   Loaded as an extra <link> AFTER style.css, so these values win via
+   normal CSS cascade order without touching style.css itself. */
+:root {
+  --c-gold: #5ac8fa;
+  --c-gold-bright: #8fe3ff;
+  --c-flame: #2ea6d6;
+  --c-flame-bright: #5ac8fa;
+  --c-flame-dark: #0d3a4d;
+  --glow-gold: 0 0 12px rgba(90, 200, 250, 0.55);
+  --glow-flame: 0 0 18px rgba(46, 166, 214, 0.65);
+}

@@ -72,9 +72,60 @@ const GameEngine = (() => {
   // parsing the user-agent string.
   const useGlow = !window.matchMedia("(pointer: coarse)").matches;
 
+  // ------------------------------------------------------------------
+  // SKIN — note shape/color config, set once in init() from whatever
+  // skins/catalog.json entry main.js picked. Defaults below exactly
+  // match what used to be hardcoded, so the built-in "default" skin
+  // looks byte-identical to before this was made configurable.
+  // ------------------------------------------------------------------
+  let noteShape = "flower";        // "flower" | "circle" | "diamond"
+  let noteColor = "#ff9f6b";
+  let noteColorActive = "#ffe6d6"; // brighter tint while a Hold is being pressed
+  let noteCenterColor = "#ffe6d6"; // sprite's inner highlight dot
+  let holdColor = "#ff8a3d";
+  let particleColor = "#ffd76b";   // Perfect-tier particle color ("Great" reuses noteColor)
+
+  function hexToRgb(hex) {
+    const clean = hex.replace("#", "");
+    const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+    const n = parseInt(full, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function withAlpha(hex, alpha) {
+    const [r, g, b] = hexToRgb(hex);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  function lightenHex(hex, amount) {
+    const [r, g, b] = hexToRgb(hex);
+    const lr = Math.round(r + (255 - r) * amount);
+    const lg = Math.round(g + (255 - g) * amount);
+    const lb = Math.round(b + (255 - b) * amount);
+    return `#${[lr, lg, lb].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  // Can be called any time (not just at init) — e.g. main.js calls this
+  // fresh before every GameEngine.start(), so switching skins between
+  // replays doesn't require a full re-initialization. Clears the sprite
+  // cache since previously-cached shapes/colors would otherwise persist.
+  function applySkin(skin = {}) {
+    noteShape = skin.noteShape || "flower";
+    noteColor = skin.noteColor || "#ff9f6b";
+    noteColorActive = skin.noteColorActive || lightenHex(noteColor, 0.5);
+    noteCenterColor = skin.noteCenterColor || "#ffe6d6";
+    holdColor = skin.holdColor || "#ff8a3d";
+    particleColor = skin.particleColor || "#ffd76b";
+    spriteCache.clear();
+  }
+
   // Practice Mode: when set, the loop re-seeks and restarts once
   // songTime passes loopEnd. Cleared by passing null via setLoopRegion.
   let loopRegion = null; // { start, end, onLoop }
+
+  // Autoplay: the engine judges every note itself (always PERFECT,
+  // exact-time hold press/release) and real input is ignored — see the
+  // guards at the top of handleLaneDown/handleLaneUp.
+  let autoplay = false;
+  let elAutoplayWatermark = null;
 
   // DOM refs (HUD lives outside canvas per index.html)
   let elCombo, elScore, elJudgement, elKeyRow;
@@ -91,11 +142,13 @@ const GameEngine = (() => {
     getSongTime = opts.getSongTime || getSongTime;
     onFinish = opts.onFinish || null;
     setNoteSpeed(opts.noteSpeed || 10);
+    applySkin(opts.skin);
 
     elCombo = document.getElementById("hud-combo-count");
     elScore = document.getElementById("hud-score");
     elJudgement = document.getElementById("judgement-text");
     elKeyRow = document.getElementById("key-row");
+    elAutoplayWatermark = document.getElementById("autoplay-watermark");
 
     buildKeyIndicators();
     resize();
@@ -203,6 +256,7 @@ const GameEngine = (() => {
     const songTime = getSongTime();
 
     spawnDueNotes(songTime);
+    updateAutoplay(songTime);
     updateHolds(songTime);
     expireMissedNotes(songTime);
     updateParticles(dt);
@@ -230,6 +284,52 @@ const GameEngine = (() => {
   function setLoopRegion(region) {
     loopRegion = region;
   }
+
+  function setAutoplay(enabled) {
+    autoplay = !!enabled;
+    if (elAutoplayWatermark) elAutoplayWatermark.hidden = !autoplay;
+    // Real input state shouldn't linger from before autoplay was toggled on.
+    if (autoplay) {
+      heldLanes.clear();
+      activeHolds.clear();
+    }
+  }
+
+  // Presses every tap note and holds/releases every Hold note the
+  // instant it's due — always exactly on time, so it always grades
+  // PERFECT. Runs every frame right after notes spawn, before the
+  // miss-expiry check, so a note is never left long enough to miss.
+  function updateAutoplay(songTime) {
+    if (!autoplay) return;
+
+    for (const note of activeNotes) {
+      if (note.judged || note.holdActive) continue;
+      if (songTime < note.time) continue;
+
+      if (note.type === "hold") {
+        note.holdActive = true;
+        note.headQuality = "perfect";
+        activeHolds.set(note.lane, note);
+        setKeyIndicatorActive(note.lane, true);
+        spawnHitParticles(note.lane, "perfect");
+      } else {
+        setKeyIndicatorActive(note.lane, true);
+        judge(note, "perfect");
+        // Tap indicators don't get an explicit "up" event from autoplay
+        // since there's no hold to release — clear the flash shortly after.
+        setTimeout(() => setKeyIndicatorActive(note.lane, false), 90);
+      }
+    }
+
+    activeHolds.forEach((note, lane) => {
+      if (songTime >= note.time + note.duration) {
+        activeHolds.delete(lane);
+        setKeyIndicatorActive(lane, false);
+        judge(note, "perfect");
+      }
+    });
+  }
+
 
   function spawnDueNotes(songTime) {
     const leadTime = hitLineY / pxPerSecond; // seconds before hit-time a note must appear
@@ -294,6 +394,7 @@ const GameEngine = (() => {
   }
 
   function handleLaneDown(lane) {
+    if (autoplay) return; // autoplay judges every note itself — real input is ignored to avoid double-judging
     if (lane < 0 || lane >= laneCount || heldLanes.has(lane)) return;
     heldLanes.add(lane);
     setKeyIndicatorActive(lane, true);
@@ -317,6 +418,7 @@ const GameEngine = (() => {
   }
 
   function handleLaneUp(lane) {
+    if (autoplay) return;
     if (lane < 0 || lane >= laneCount) return;
     heldLanes.delete(lane);
     setKeyIndicatorActive(lane, false);
@@ -433,7 +535,7 @@ const GameEngine = (() => {
   function spawnHitParticles(lane, quality) {
     const x = laneX[lane];
     const y = hitLineY;
-    const color = quality === "perfect" ? "#ffd76b" : "#ff9f6b";
+    const color = quality === "perfect" ? particleColor : noteColor;
     const count = quality === "perfect" ? 14 : 9;
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + Math.random() * 0.3;
@@ -520,23 +622,23 @@ const GameEngine = (() => {
 
       if (barHeight > 0) {
         const grad = gfx.createLinearGradient(0, barTop, 0, barBottom);
-        grad.addColorStop(0, "rgba(255,138,61,0.25)");
-        grad.addColorStop(1, "rgba(255,138,61,0.8)");
+        grad.addColorStop(0, withAlpha(holdColor, 0.25));
+        grad.addColorStop(1, withAlpha(holdColor, 0.8));
         gfx.fillStyle = grad;
         gfx.fillRect(x - half, barTop, HOLD_BAR_WIDTH, barHeight);
-        gfx.strokeStyle = "rgba(255,224,163,0.5)";
+        gfx.strokeStyle = "rgba(255,224,163,0.5)"; // fixed gold accent, not skin-dependent
         gfx.lineWidth = 1.5;
         gfx.strokeRect(x - half, barTop, HOLD_BAR_WIDTH, barHeight);
       }
 
-      // Head and tail both drawn as the same flower as a Tap note —
+      // Head and tail both drawn as the same shape as a Tap note —
       // symmetric, matches how it should be judged (either end is a
       // normal hit), simpler to read than a mismatched head/tail pair.
-      drawFlower(x, headY, note.holdActive ? "#ffe6d6" : "#ff9f6b");
-      drawFlower(x, tailY, note.holdActive ? "#ffe6d6" : "#ff9f6b");
+      drawNoteSprite(x, headY, note.holdActive ? noteColorActive : noteColor);
+      drawNoteSprite(x, tailY, note.holdActive ? noteColorActive : noteColor);
     } else {
       const y = yForTime(note.time, songTime);
-      drawFlower(x, y, "#ff9f6b");
+      drawNoteSprite(x, y, noteColor);
     }
   }
 
@@ -544,17 +646,17 @@ const GameEngine = (() => {
     return hitLineY - (noteTime - songTime) * pxPerSecond;
   }
 
-  // Pre-rendered sprite cache — the flower shape (with or without glow)
-  // is drawn to an offscreen canvas exactly once per distinct color,
-  // then every frame just does a cheap drawImage() instead of redoing
-  // the petal path + shadowBlur math 60 times a second per note. This
-  // was the single biggest contributor to mobile jitter: shadowBlur is
-  // costly on phone GPUs, and it was being recomputed for every visible
-  // note on every single frame.
+  // Pre-rendered sprite cache — the note shape (with or without glow)
+  // is drawn to an offscreen canvas exactly once per distinct
+  // shape+color combo, then every frame just does a cheap drawImage()
+  // instead of redoing the path + shadowBlur math 60 times a second
+  // per note. This was the single biggest contributor to mobile
+  // jitter: shadowBlur is costly on phone GPUs, and it was being
+  // recomputed for every visible note on every single frame.
   const spriteCache = new Map();
 
-  function getFlowerSprite(color) {
-    const key = color + "|" + useGlow;
+  function getNoteSprite(color) {
+    const key = noteShape + "|" + color + "|" + useGlow;
     let sprite = spriteCache.get(key);
     if (sprite) return sprite;
 
@@ -565,29 +667,59 @@ const GameEngine = (() => {
     sprite.height = size;
     const sgfx = sprite.getContext("2d");
     sgfx.translate(size / 2, size / 2);
+    if (useGlow) sgfx.shadowColor = color;
 
-    const petals = 6;
     const r = NOTE_RADIUS;
-    if (useGlow) { sgfx.shadowColor = color; sgfx.shadowBlur = 10; }
-    for (let i = 0; i < petals; i++) {
-      sgfx.rotate((Math.PI * 2) / petals);
+    if (noteShape === "circle") {
+      if (useGlow) sgfx.shadowBlur = 10;
       sgfx.beginPath();
-      sgfx.ellipse(0, -r * 0.55, r * 0.4, r * 0.55, 0, 0, Math.PI * 2);
+      sgfx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
       sgfx.fillStyle = color;
       sgfx.fill();
+      sgfx.beginPath();
+      sgfx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+      sgfx.fillStyle = noteCenterColor;
+      if (useGlow) sgfx.shadowBlur = 4;
+      sgfx.fill();
+    } else if (noteShape === "diamond") {
+      const s = r * 0.82;
+      if (useGlow) sgfx.shadowBlur = 10;
+      sgfx.beginPath();
+      sgfx.moveTo(0, -s); sgfx.lineTo(s, 0); sgfx.lineTo(0, s); sgfx.lineTo(-s, 0);
+      sgfx.closePath();
+      sgfx.fillStyle = color;
+      sgfx.fill();
+      const s2 = r * 0.32;
+      sgfx.beginPath();
+      sgfx.moveTo(0, -s2); sgfx.lineTo(s2, 0); sgfx.lineTo(0, s2); sgfx.lineTo(-s2, 0);
+      sgfx.closePath();
+      sgfx.fillStyle = noteCenterColor;
+      if (useGlow) sgfx.shadowBlur = 4;
+      sgfx.fill();
+    } else {
+      // "flower" — default, 6-petal shape
+      const petals = 6;
+      if (useGlow) sgfx.shadowBlur = 10;
+      for (let i = 0; i < petals; i++) {
+        sgfx.rotate((Math.PI * 2) / petals);
+        sgfx.beginPath();
+        sgfx.ellipse(0, -r * 0.55, r * 0.4, r * 0.55, 0, 0, Math.PI * 2);
+        sgfx.fillStyle = color;
+        sgfx.fill();
+      }
+      sgfx.beginPath();
+      sgfx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
+      sgfx.fillStyle = noteCenterColor;
+      if (useGlow) sgfx.shadowBlur = 4;
+      sgfx.fill();
     }
-    sgfx.beginPath();
-    sgfx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
-    sgfx.fillStyle = "#ffe6d6";
-    if (useGlow) sgfx.shadowBlur = 4;
-    sgfx.fill();
 
     spriteCache.set(key, sprite);
     return sprite;
   }
 
-  function drawFlower(x, y, color) {
-    const sprite = getFlowerSprite(color);
+  function drawNoteSprite(x, y, color) {
+    const sprite = getNoteSprite(color);
     gfx.drawImage(sprite, x - sprite.width / 2, y - sprite.height / 2);
   }
 
@@ -617,6 +749,8 @@ const GameEngine = (() => {
     handleLaneDown,
     handleLaneUp,
     setLoopRegion,
+    setAutoplay,
+    applySkin,
     resize,
   };
 })();

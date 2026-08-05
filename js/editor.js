@@ -504,6 +504,7 @@ const Editor = (() => {
   function testPlay() {
     if (!duration || !notes.length) return;
     if (isPlaying) togglePlay();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 
     document.querySelectorAll(".screen").forEach((el) => el.classList.remove("screen--active"));
     document.getElementById("screen-gameplay").classList.add("screen--active");

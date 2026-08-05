@@ -692,6 +692,14 @@
     const autoplayOn = autoplayToggle.checked;
     lastRunWasAutoplay = autoplayOn;
 
+    // Reduce (can't fully eliminate) the chance a Vietnamese IME like
+    // Unikey intercepts gameplay keystrokes to compose diacritics — IMEs
+    // hook far more aggressively when a text-editable element has focus.
+    // handleLaneDown/Up read event.code (physical key), not event.key,
+    // which is the other half of this defense — that part is already
+    // correct and unaffected by whatever character an IME would compose.
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+
     goScreen("screen-gameplay");
     AudioManager.ensureContext();
     AudioManager.setVolume(state.settings.musicVolume);
@@ -1037,7 +1045,14 @@
       // Hard fallback so the game never has zero skins even if the
       // catalog file is missing/broken — matches GameEngine's own
       // built-in defaults exactly.
-      skinCatalog = [{ id: "default", name: "Mặc Định", noteShape: "flower",
+      const defaultFlowerPath =
+        "M 0,0 Q -21.00,-27.50 0.00,-50.00 Q 21.00,-27.50 0,0 Z " +
+        "M 0,0 Q 13.32,-31.94 43.30,-25.00 Q 34.32,4.44 0,0 Z " +
+        "M 0,0 Q 34.32,-4.44 43.30,25.00 Q 13.32,31.94 0,0 Z " +
+        "M 0,0 Q 21.00,27.50 0.00,50.00 Q -21.00,27.50 0,0 Z " +
+        "M 0,0 Q -13.32,31.94 -43.30,25.00 Q -34.32,-4.44 0,0 Z " +
+        "M 0,0 Q -34.32,4.44 -43.30,-25.00 Q -13.32,-31.94 0,0 Z";
+      skinCatalog = [{ id: "default", name: "Mặc Định", noteShapePath: defaultFlowerPath,
         noteColor: "#ff9f6b", noteColorActive: "#ffe6d6", noteCenterColor: "#ffe6d6",
         holdColor: "#ff8a3d", particleColor: "#ffd76b", cssFile: null, default: true }];
     }
@@ -1081,9 +1096,15 @@
     skinCatalog.forEach((skin) => {
       const card = document.createElement("div");
       card.className = "skin-picker-card" + (currentSkin?.id === skin.id ? " skin-picker-card--selected" : "");
-      const shapeClass = `skin-swatch--${skin.noteShape || "flower"}`;
+      // Uses the exact same path data GameEngine draws on canvas — single
+      // source of truth, so the Settings preview can never drift out of
+      // sync with what the note actually looks like in gameplay.
+      const path = skin.noteShapePath || "M -50,0 A 50,50 0 1,0 50,0 A 50,50 0 1,0 -50,0 Z";
+      const color = skin.noteColor || "#ff9f6b";
       card.innerHTML = `
-        <div class="skin-swatch ${shapeClass}" style="background:${skin.noteColor || "#ff9f6b"}"></div>
+        <svg class="skin-swatch" viewBox="-50 -50 100 100" width="34" height="34">
+          <path d="${path}" fill="${color}"></path>
+        </svg>
         <span>${escapeHtml(skin.name || skin.id)}</span>
       `;
       card.addEventListener("click", () => {

@@ -526,6 +526,9 @@ html, body {
   flex-direction: column;
   gap: 22px;
   padding: 10px 28px 40px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .settings-row { display: flex; flex-direction: column; gap: 8px; }
 .settings-row label { font-size: 13px; color: rgba(244,234,210,0.7); }

@@ -19,6 +19,7 @@ const AudioManager = (() => {
   let ctx = null;                 // AudioContext instance
   let sourceNode = null;          // current AudioBufferSourceNode
   let gainNode = null;            // master music gain (volume control)
+  let sfxGainNode = null;         // independent volume control for hit/miss sounds
   let audioBuffer = null;         // decoded song buffer
   let startCtxTime = 0;           // ctx.currentTime at the moment playback started
   let startOffset = 0;            // seconds into the buffer playback started at (for resume)
@@ -39,6 +40,8 @@ const AudioManager = (() => {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       gainNode = ctx.createGain();
       gainNode.connect(ctx.destination);
+      sfxGainNode = ctx.createGain();
+      sfxGainNode.connect(ctx.destination);
     }
     // Browsers suspend AudioContext until a user gesture — call this
     // from a click handler (e.g. "Start Song" button) to unlock it.
@@ -140,6 +143,34 @@ const AudioManager = (() => {
     gainNode.gain.value = Math.max(0, Math.min(1, percent0to100 / 100));
   }
 
+  function setSfxVolume(percent0to100) {
+    if (!sfxGainNode) return;
+    sfxGainNode.gain.value = Math.max(0, Math.min(1, percent0to100 / 100));
+  }
+
+  // Uses two tiny synthesized sounds instead of external files: Perfect and
+  // Great share a bright hit, while Miss has a short low tone. This shares
+  // the existing AudioContext but never changes song playback or timing.
+  function playSfx(quality) {
+    if (!ctx || !sfxGainNode) return;
+    const isHit = quality === "perfect" || quality === "great";
+    const now = ctx.currentTime;
+    const oscillator = ctx.createOscillator();
+    const envelope = ctx.createGain();
+
+    oscillator.type = isHit ? "sine" : "triangle";
+    oscillator.frequency.setValueAtTime(isHit ? 880 : 180, now);
+    oscillator.frequency.linearRampToValueAtTime(isHit ? 1180 : 115, now + (isHit ? 0.07 : 0.10));
+    envelope.gain.setValueAtTime(0.0001, now);
+    envelope.gain.exponentialRampToValueAtTime(isHit ? 0.10 : 0.065, now + 0.005);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, now + (isHit ? 0.07 : 0.10));
+
+    oscillator.connect(envelope);
+    envelope.connect(sfxGainNode);
+    oscillator.start(now);
+    oscillator.stop(now + (isHit ? 0.09 : 0.12));
+  }
+
   // ------------------------------------------------------------------
   // THE core timing function gameplay code should call every frame.
   // Returns current playback position in seconds, corrected by the
@@ -172,6 +203,8 @@ const AudioManager = (() => {
     resume,
     stop,
     setVolume,
+    setSfxVolume,
+    playSfx,
     getSongTime,
     getRawContextTime,
     isPlaying: () => isPlaying,

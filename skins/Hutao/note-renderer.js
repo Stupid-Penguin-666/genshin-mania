@@ -2,7 +2,7 @@
    into a new skin folder and change only draw() to create a new shape. */
 (() => {
   const registry = window.GenshinManiaSkinRenderers || (window.GenshinManiaSkinRenderers = {});
-  registry.default = {
+  registry.Hutao = {
     draw(ctx, { radius: r, color, centerColor, useGlow }) {
       const petals = 6;
       if (useGlow) ctx.shadowBlur = 10;

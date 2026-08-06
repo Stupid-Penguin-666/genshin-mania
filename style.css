@@ -415,8 +415,7 @@ html, body {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 8%;
-  height: 48px;
+  height: 36px;
   z-index: 3;
   pointer-events: none;
 }
@@ -424,26 +423,29 @@ html, body {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  width: 46px; height: 46px;
-  border-radius: 10px;
-  border: 1.5px solid rgba(244,234,210,0.55);
-  background: rgba(13,22,38,0.35);
+  width: 40px; height: 36px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.78);
+  background: rgba(255,255,255,0.96);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: rgba(244,234,210,0.85);
-  transition: background 0.08s, box-shadow 0.08s, border-color 0.08s;
+  font-size: 18px;
+  font-weight: 800;
+  color: #363636;
+  line-height: 1;
+  box-shadow: 0 2px 5px rgba(53,28,21,0.18);
+  transition: background 0.08s, box-shadow 0.08s, border-color 0.08s, color 0.08s;
   /* The row above sets pointer-events: none so it doesn't block the
      canvas; each indicator re-enables it individually so touch taps
      land on the lane circles as designed. */
   pointer-events: auto;
 }
 .key-indicator.active {
-  background: color-mix(in srgb, var(--c-gold-bright) 25%, transparent);
-  border-color: var(--c-gold-bright);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--c-gold-bright) 75%, transparent);
+  background: var(--c-gold-bright);
+  border-color: rgba(255,255,255,0.98);
+  color: #24313b;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--c-gold-bright) 72%, transparent);
 }
 
 /* Touch devices: bigger hit target (fingers are far less precise than
@@ -452,6 +454,7 @@ html, body {
 @media (pointer: coarse) {
   .key-indicator {
     width: 60px; height: 60px;
+    font-size: 22px;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
   }

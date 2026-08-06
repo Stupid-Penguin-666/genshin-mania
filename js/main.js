@@ -703,6 +703,7 @@
     goScreen("screen-gameplay");
     AudioManager.ensureContext();
     AudioManager.setVolume(state.settings.musicVolume);
+    AudioManager.setSfxVolume(state.settings.sfxVolume);
 
     if (!gameplayInitialized) {
       GameEngine.init(canvas, {
@@ -836,6 +837,7 @@
   });
   settingSfxVol.addEventListener("input", (e) => {
     state.settings.sfxVolume = +e.target.value;
+    AudioManager.setSfxVolume(state.settings.sfxVolume);
     saveSettings();
   });
   settingNoteSpeed.addEventListener("input", (e) => {
@@ -1033,6 +1035,29 @@
   let currentSkin = null; // the applied skin's full config object
   const skinPickerGrid = document.getElementById("skin-picker-grid");
   let skinThemeLinkEl = null; // created/removed dynamically, not a static <link> in index.html
+  const skinRendererLoads = new Map();
+
+  // A renderer is a tiny skin-owned script that registers
+  // window.GenshinManiaSkinRenderers[skin.id] = { draw(...) }. Loading it
+  // here keeps every shape definition out of the gameplay engine.
+  function loadSkinRenderer(skin) {
+    const registry = window.GenshinManiaSkinRenderers || (window.GenshinManiaSkinRenderers = {});
+    if (registry[skin.id]) return Promise.resolve(registry[skin.id]);
+    if (!skin.rendererFile) return Promise.reject(new Error(`Skin ${skin.id} thiếu rendererFile`));
+    if (skinRendererLoads.has(skin.rendererFile)) return skinRendererLoads.get(skin.rendererFile);
+
+    const load = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = skin.rendererFile;
+      script.onload = () => registry[skin.id]
+        ? resolve(registry[skin.id])
+        : reject(new Error(`Skin renderer ${skin.id} chưa đăng ký`));
+      script.onerror = () => reject(new Error(`Không tải được renderer: ${skin.rendererFile}`));
+      document.head.appendChild(script);
+    });
+    skinRendererLoads.set(skin.rendererFile, load);
+    return load;
+  }
 
   async function loadSkinCatalog() {
     try {
@@ -1054,18 +1079,27 @@
         "M 0,0 Q -34.32,4.44 -43.30,-25.00 Q -13.32,-31.94 0,0 Z";
       skinCatalog = [{ id: "default", name: "Mặc Định", noteShapePath: defaultFlowerPath,
         noteColor: "#ff9f6b", noteColorActive: "#ffe6d6", noteCenterColor: "#ffe6d6",
-        holdColor: "#ff8a3d", particleColor: "#ffd76b", cssFile: null, default: true }];
+        holdColor: "#ff8a3d", particleColor: "#ffd76b", cssFile: null,
+        rendererFile: "skins/default/note-renderer.js", default: true }];
     }
 
     const savedId = localStorage.getItem(STORAGE_SKIN);
     const chosen = skinCatalog.find((s) => s.id === savedId)
       || skinCatalog.find((s) => s.default)
       || skinCatalog[0];
-    applySkinChoice(chosen);
+    await applySkinChoice(chosen);
   }
 
-  function applySkinChoice(skin) {
-    currentSkin = skin;
+  async function applySkinChoice(skin) {
+    let renderer;
+    try {
+      renderer = await loadSkinRenderer(skin);
+    } catch (err) {
+      console.error("Không tải được skin renderer:", err);
+      showToast(`Skin \"${skin.name || skin.id}\" không thể tải hoàn chỉnh.`, "error");
+      return;
+    }
+    currentSkin = { ...skin, noteRenderer: renderer };
 
     if (skin.cssFile) {
       if (!skinThemeLinkEl) {
@@ -1086,7 +1120,7 @@
     // reachable mid-song via other means shouldn't silently no-op),
     // applying immediately is harmless — GameEngine.applySkin() itself
     // is safe to call at any time.
-    if (gameplayInitialized) GameEngine.applySkin(skin);
+    if (gameplayInitialized) GameEngine.applySkin(currentSkin);
 
     renderSkinPicker();
   }
@@ -1096,9 +1130,10 @@
     skinCatalog.forEach((skin) => {
       const card = document.createElement("div");
       card.className = "skin-picker-card" + (currentSkin?.id === skin.id ? " skin-picker-card--selected" : "");
-      // Uses the exact same path data GameEngine draws on canvas — single
-      // source of truth, so the Settings preview can never drift out of
-      // sync with what the note actually looks like in gameplay.
+      // `noteShapePath` is an optional lightweight SVG preview. It is kept
+      // separate from the canvas renderer so the picker never affects how a
+      // skin draws in gameplay; older skins without a preview retain the
+      // existing circular swatch.
       const path = skin.noteShapePath || "M -50,0 A 50,50 0 1,0 50,0 A 50,50 0 1,0 -50,0 Z";
       const color = skin.noteColor || "#ff9f6b";
       card.innerHTML = `
@@ -1109,7 +1144,7 @@
       `;
       card.addEventListener("click", () => {
         localStorage.setItem(STORAGE_SKIN, skin.id);
-        applySkinChoice(skin);
+        void applySkinChoice(skin);
       });
       skinPickerGrid.appendChild(card);
     });

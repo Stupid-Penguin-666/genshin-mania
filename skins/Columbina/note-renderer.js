@@ -4,7 +4,7 @@
 (() => {
   const registry = window.GenshinManiaSkinRenderers || (window.GenshinManiaSkinRenderers = {});
 
-  registry.columbina = {
+  registry.Columbina = {
     draw(ctx, { radius: r, color, centerColor, useGlow }) {
       ctx.save();
 

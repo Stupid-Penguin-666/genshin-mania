@@ -2,7 +2,7 @@
   {
     "id": "Hutao",
     "name": "Hutao",
-    "rendererFile": "skins/default/note-renderer.js",
+    "rendererFile": "skins/Hutao/note-renderer.js",
     "noteColor": "#ff9f6b",
     "noteColorActive": "#ffe6d6",
     "noteCenterColor": "#ffe6d6",
@@ -38,7 +38,7 @@
   {
     "id": "Columbina",
     "name": "Columbina",
-    "rendererFile": "skins/columbina/note-renderer.js",
+    "rendererFile": "skins/Columbina/note-renderer.js",
     "noteColor": "#8ed9ff",
     "noteColorActive": "#d8f3ff",
     "noteCenterColor": "#a9b5ff",

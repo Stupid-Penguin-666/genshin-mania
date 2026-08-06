@@ -1,0 +1,10 @@
+/* Columbina — UI accent palette, loaded only while this skin is selected. */
+:root {
+  --c-gold: #8ed9ff;
+  --c-gold-bright: #e5f8ff;
+  --c-flame: #bd7de8;
+  --c-flame-bright: #dfa9ff;
+  --c-flame-dark: #2d1a58;
+  --glow-gold: 0 0 12px rgba(142, 217, 255, 0.58);
+  --glow-flame: 0 0 18px rgba(189, 125, 232, 0.66);
+}

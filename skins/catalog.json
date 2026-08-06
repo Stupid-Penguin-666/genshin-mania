@@ -1,7 +1,7 @@
 [
   {
-    "id": "default",
-    "name": "Mặc Định",
+    "id": "Hutao",
+    "name": "Hutao",
     "rendererFile": "skins/default/note-renderer.js",
     "noteColor": "#ff9f6b",
     "noteColorActive": "#ffe6d6",
@@ -13,7 +13,7 @@
   },
   {
     "id": "ocean",
-    "name": "Ocean (Ví Dụ)",
+    "name": "Ocean",
     "rendererFile": "skins/ocean/note-renderer.js",
     "noteColor": "#5ac8fa",
     "noteColorActive": "#d6f4ff",
@@ -25,7 +25,7 @@
   },
   {
     "id": "amethyst",
-    "name": "Amethyst (Ví Dụ)",
+    "name": "Amethyst",
     "rendererFile": "skins/amethyst/note-renderer.js",
     "noteColor": "#b57bff",
     "noteColorActive": "#ecdcff",
@@ -36,7 +36,7 @@
     "default": false
   },
   {
-    "id": "columbina",
+    "id": "Columbina",
     "name": "Columbina",
     "rendererFile": "skins/columbina/note-renderer.js",
     "noteColor": "#8ed9ff",

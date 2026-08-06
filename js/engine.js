@@ -78,12 +78,16 @@ const GameEngine = (() => {
   // match what used to be hardcoded, so the built-in "default" skin
   // looks byte-identical to before this was made configurable.
   // ------------------------------------------------------------------
-  let noteShape = "flower";        // "flower" | "circle" | "diamond"
   let noteColor = "#ff9f6b";
   let noteColorActive = "#ffe6d6"; // brighter tint while a Hold is being pressed
   let noteCenterColor = "#ffe6d6"; // sprite's inner highlight dot
   let holdColor = "#ff8a3d";
   let particleColor = "#ffd76b";   // Perfect-tier particle color ("Great" reuses noteColor)
+  // A skin owns the code that draws its note shape.  The engine only
+  // supplies a canvas context and the current visual state, so adding a
+  // new shape never requires changing gameplay code.
+  let noteRenderer = null;
+  let noteRendererId = "default";
 
   function hexToRgb(hex) {
     const clean = hex.replace("#", "");
@@ -108,12 +112,13 @@ const GameEngine = (() => {
   // replays doesn't require a full re-initialization. Clears the sprite
   // cache since previously-cached shapes/colors would otherwise persist.
   function applySkin(skin = {}) {
-    noteShape = skin.noteShape || "flower";
     noteColor = skin.noteColor || "#ff9f6b";
     noteColorActive = skin.noteColorActive || lightenHex(noteColor, 0.5);
     noteCenterColor = skin.noteCenterColor || "#ffe6d6";
     holdColor = skin.holdColor || "#ff8a3d";
     particleColor = skin.particleColor || "#ffd76b";
+    noteRenderer = skin.noteRenderer || null;
+    noteRendererId = skin.id || "default";
     spriteCache.clear();
   }
 
@@ -185,6 +190,13 @@ const GameEngine = (() => {
   // width, so it never lines up exactly with the canvas lane centers.
   function positionKeyIndicators() {
     if (!elKeyRow) return;
+    // The key labels share the exact canvas lane centers. Their vertical
+    // position is also derived from the rendered hit line, rather than a
+    // separate CSS percentage, so resizing can never pull the two apart.
+    const keyHeight = window.matchMedia("(pointer: coarse)").matches ? 60 : 36;
+    const labelTop = Math.min(hitLineY + 18, canvas.clientHeight - keyHeight - 8);
+    elKeyRow.style.top = `${labelTop}px`;
+    elKeyRow.style.bottom = "auto";
     keymap.forEach((code, i) => {
       const el = elKeyRow.querySelector(`[data-code="${code}"]`);
       if (el) el.style.left = `${laneX[i]}px`;
@@ -491,6 +503,7 @@ const GameEngine = (() => {
     }
 
     showJudgementText(quality);
+    window.AudioManager?.playSfx(quality);
     updateHud();
   }
 
@@ -589,20 +602,22 @@ const GameEngine = (() => {
   }
 
   function drawHitLine(w) {
-    gfx.strokeStyle = "rgba(245,197,107,0.5)";
-    gfx.lineWidth = 2;
+    gfx.strokeStyle = "rgba(255,248,229,0.84)";
+    gfx.lineWidth = 1.5;
     gfx.beginPath();
     gfx.moveTo(laneX[0] - 30, hitLineY);
     gfx.lineTo(laneX[laneX.length - 1] + 30, hitLineY);
     gfx.stroke();
 
-    // Circle marker per lane on the hit line, matching the reference
-    // screenshot — the DOM .key-indicator row sits just below these.
+    // Bright circular markers at the exact lane centers. The matching
+    // keyboard labels below use the same `laneX` values in positionKeyIndicators().
     laneX.forEach((x) => {
       gfx.beginPath();
       gfx.arc(x, hitLineY, 9, 0, Math.PI * 2);
-      gfx.strokeStyle = "rgba(244,234,210,0.7)";
-      gfx.lineWidth = 1.5;
+      gfx.fillStyle = "rgba(255,255,255,0.96)";
+      gfx.fill();
+      gfx.strokeStyle = "rgba(255,248,229,0.94)";
+      gfx.lineWidth = 2;
       gfx.stroke();
     });
   }
@@ -656,7 +671,7 @@ const GameEngine = (() => {
   const spriteCache = new Map();
 
   function getNoteSprite(color) {
-    const key = noteShape + "|" + color + "|" + useGlow;
+    const key = noteRendererId + "|" + color + "|" + noteCenterColor + "|" + useGlow;
     let sprite = spriteCache.get(key);
     if (sprite) return sprite;
 
@@ -669,48 +684,20 @@ const GameEngine = (() => {
     sgfx.translate(size / 2, size / 2);
     if (useGlow) sgfx.shadowColor = color;
 
-    const r = NOTE_RADIUS;
-    if (noteShape === "circle") {
-      if (useGlow) sgfx.shadowBlur = 10;
-      sgfx.beginPath();
-      sgfx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
-      sgfx.fillStyle = color;
-      sgfx.fill();
-      sgfx.beginPath();
-      sgfx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
-      sgfx.fillStyle = noteCenterColor;
-      if (useGlow) sgfx.shadowBlur = 4;
-      sgfx.fill();
-    } else if (noteShape === "diamond") {
-      const s = r * 0.82;
-      if (useGlow) sgfx.shadowBlur = 10;
-      sgfx.beginPath();
-      sgfx.moveTo(0, -s); sgfx.lineTo(s, 0); sgfx.lineTo(0, s); sgfx.lineTo(-s, 0);
-      sgfx.closePath();
-      sgfx.fillStyle = color;
-      sgfx.fill();
-      const s2 = r * 0.32;
-      sgfx.beginPath();
-      sgfx.moveTo(0, -s2); sgfx.lineTo(s2, 0); sgfx.lineTo(0, s2); sgfx.lineTo(-s2, 0);
-      sgfx.closePath();
-      sgfx.fillStyle = noteCenterColor;
-      if (useGlow) sgfx.shadowBlur = 4;
-      sgfx.fill();
+    if (noteRenderer && typeof noteRenderer.draw === "function") {
+      noteRenderer.draw(sgfx, {
+        radius: NOTE_RADIUS,
+        color,
+        centerColor: noteCenterColor,
+        useGlow,
+      });
     } else {
-      // "flower" — default, 6-petal shape
-      const petals = 6;
+      // A broken third-party skin must not make notes invisible. The
+      // built-in default renderer is normally loaded before play starts.
       if (useGlow) sgfx.shadowBlur = 10;
-      for (let i = 0; i < petals; i++) {
-        sgfx.rotate((Math.PI * 2) / petals);
-        sgfx.beginPath();
-        sgfx.ellipse(0, -r * 0.55, r * 0.4, r * 0.55, 0, 0, Math.PI * 2);
-        sgfx.fillStyle = color;
-        sgfx.fill();
-      }
+      sgfx.fillStyle = color;
       sgfx.beginPath();
-      sgfx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
-      sgfx.fillStyle = noteCenterColor;
-      if (useGlow) sgfx.shadowBlur = 4;
+      sgfx.arc(0, 0, NOTE_RADIUS * 0.72, 0, Math.PI * 2);
       sgfx.fill();
     }
 

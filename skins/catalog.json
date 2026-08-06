@@ -2,7 +2,7 @@
   {
     "id": "default",
     "name": "Mặc Định",
-    "noteShape": "flower",
+    "rendererFile": "skins/default/note-renderer.js",
     "noteColor": "#ff9f6b",
     "noteColorActive": "#ffe6d6",
     "noteCenterColor": "#ffe6d6",
@@ -14,7 +14,7 @@
   {
     "id": "ocean",
     "name": "Ocean (Ví Dụ)",
-    "noteShape": "circle",
+    "rendererFile": "skins/ocean/note-renderer.js",
     "noteColor": "#5ac8fa",
     "noteColorActive": "#d6f4ff",
     "noteCenterColor": "#eafcff",
@@ -26,13 +26,25 @@
   {
     "id": "amethyst",
     "name": "Amethyst (Ví Dụ)",
-    "noteShape": "diamond",
+    "rendererFile": "skins/amethyst/note-renderer.js",
     "noteColor": "#b57bff",
     "noteColorActive": "#ecdcff",
     "noteCenterColor": "#f5ecff",
     "holdColor": "#8a4fd6",
     "particleColor": "#d9b3ff",
     "cssFile": "skins/amethyst/theme.css",
+    "default": false
+  },
+  {
+    "id": "columbina",
+    "name": "Columbina",
+    "rendererFile": "skins/columbina/note-renderer.js",
+    "noteColor": "#8ed9ff",
+    "noteColorActive": "#d8f3ff",
+    "noteCenterColor": "#a9b5ff",
+    "holdColor": "#df88ec",
+    "particleColor": "#dff8ff",
+    "cssFile": "skins/columbina/theme.css",
     "default": false
   }
 ]

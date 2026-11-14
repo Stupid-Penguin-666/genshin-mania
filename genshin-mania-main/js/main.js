@@ -48,6 +48,9 @@
     keyMode: 6,          // default for new songs and the editor; each song plays in its own key count
     connectors: true,
     lowLag: false,
+    noteSize: 100,        // percent, 80 - 150
+    noteOpacity: 100,     // percent, 30 - 100
+    judgement: "standard", // standard | easy | veryeasy
   };
 
   const state = {
@@ -60,6 +63,10 @@
     const saved = readJson(KEY.settings, null);
     if (saved && typeof saved === "object") state.settings = { ...DEFAULT_SETTINGS, ...saved };
     if (!ChartGen.SUPPORTED_KEYS.includes(state.settings.keyMode)) state.settings.keyMode = 6;
+    const clampNum = (v, lo, hi, dflt) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, Math.round(+v))) : dflt);
+    state.settings.noteSize = clampNum(state.settings.noteSize, 80, 150, 100);
+    state.settings.noteOpacity = clampNum(state.settings.noteOpacity, 30, 100, 100);
+    if (!GameEngine.JUDGE_PRESETS[state.settings.judgement]) state.settings.judgement = "standard";
     const lib = readJson(KEY.library, []);
     state.library = Array.isArray(lib) ? lib.filter((s) => s && s.id && s.title) : [];
     AudioManager.loadStoredOffset();
@@ -183,6 +190,8 @@
   // ------------------------------------------------------------------
   // High scores
   // ------------------------------------------------------------------
+  const judgeLabel = (key) => t(`set.judge.${key}`);
+
   const getHighScore = (songId) => readJson(KEY.highscores, {})[songId] || null;
 
   // Returns true when this run beat the stored best (or was the first).
@@ -190,7 +199,7 @@
     const all = readJson(KEY.highscores, {});
     const prev = all[songId];
     if (prev && stats.score <= prev.score) return false;
-    all[songId] = { score: stats.score, rank: stats.rank, accuracy: stats.accuracy, maxCombo: stats.maxCombo };
+    all[songId] = { score: stats.score, rank: stats.rank, accuracy: stats.accuracy, maxCombo: stats.maxCombo, judgement: stats.judgement || "standard" };
     writeJson(KEY.highscores, all);
     return true;
   }
@@ -286,6 +295,7 @@
         const rank = document.createElement("span");
         rank.className = "song-card__rank";
         rank.textContent = best.rank;
+        if (best.judgement && best.judgement !== "standard") rank.title = judgeLabel(best.judgement);
         side.appendChild(rank);
       }
 
@@ -328,7 +338,8 @@
       bestEl.append(`${t("song.best")} `);
       const b = document.createElement("b");
       b.textContent = formatNumber(best.score);
-      bestEl.append(b, ` · ${t("song.rank", { rank: best.rank })} · ${best.accuracy.toFixed(1)}%`);
+      const mode = best.judgement && best.judgement !== "standard" ? ` · ${judgeLabel(best.judgement)}` : "";
+      bestEl.append(b, ` · ${t("song.rank", { rank: best.rank })} · ${best.accuracy.toFixed(1)}%${mode}`);
     } else {
       bestEl.textContent = t("song.noScore");
     }
@@ -639,6 +650,9 @@
       onFinish: handleFinish,
       connectors: state.settings.connectors,
       lowLag: state.settings.lowLag,
+      noteScale: state.settings.noteSize / 100,
+      noteOpacity: state.settings.noteOpacity / 100,
+      judgement: state.settings.judgement,
       skin: currentSkin || undefined,
     });
     $("hud-song-title").textContent = s.title;
@@ -799,6 +813,7 @@
     if (isNewBest) badges.push(t("result.newBest"));
     if (stats.allPerfect) badges.push("All Perfect");
     else if (stats.fullCombo) badges.push("Full Combo");
+    if (!s.autoplay && stats.judgement && stats.judgement !== "standard") badges.push(t("result.judging", { mode: judgeLabel(stats.judgement) }));
     if (s.autoplay || s.loop) badges.push(t("result.noRecord"));
     $("result-badges").textContent = badges.join(" · ");
 
@@ -855,6 +870,30 @@
     const el = $(id);
     el.addEventListener("change", () => { state.settings[key] = el.checked; saveSettings(); });
   }
+  function bindPercentSlider(inputId, outId, key) {
+    const input = $(inputId), out = $(outId);
+    input.addEventListener("input", () => {
+      state.settings[key] = +input.value;
+      out.textContent = `${input.value}%`;
+      paintSlider(input);
+      saveSettings();
+    });
+  }
+  bindPercentSlider("setting-note-size", "out-note-size", "noteSize");
+  bindPercentSlider("setting-note-opacity", "out-note-opacity", "noteOpacity");
+
+  // The help text quotes the live hit windows, so keep it in step.
+  function syncJudgeVars() {
+    const w = GameEngine.JUDGE_PRESETS[state.settings.judgement] || GameEngine.JUDGE_PRESETS.standard;
+    I18n.setVars({ perfect: w.perfect, great: w.great });
+  }
+  $("setting-judgement").addEventListener("change", (e) => {
+    state.settings.judgement = GameEngine.JUDGE_PRESETS[e.target.value] ? e.target.value : "standard";
+    saveSettings();
+    syncJudgeVars();
+  });
+  document.addEventListener("languagechange", syncJudgeVars);
+
   bindToggle("setting-connectors", "connectors");
   bindToggle("setting-lowlag", "lowLag");
 
@@ -879,6 +918,14 @@
     paintSlider($("setting-sfx-volume"));
     $("out-note-speed").textContent = s.noteSpeed;
     $("setting-keymode").value = s.keyMode;
+    $("setting-note-size").value = s.noteSize;
+    $("out-note-size").textContent = `${s.noteSize}%`;
+    paintSlider($("setting-note-size"));
+    $("setting-note-opacity").value = s.noteOpacity;
+    $("out-note-opacity").textContent = `${s.noteOpacity}%`;
+    paintSlider($("setting-note-opacity"));
+    $("setting-judgement").value = s.judgement;
+    syncJudgeVars();
     $("setting-connectors").checked = s.connectors;
     $("setting-lowlag").checked = s.lowLag;
     $("setting-language").value = s.language;

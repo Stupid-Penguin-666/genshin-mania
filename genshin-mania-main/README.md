@@ -74,6 +74,21 @@ Quy tắc khi nạp beatmap:
 - Chỉ nhận 4, 6 hoặc 8 phím. `laneCount` khác các giá trị này bị từ chối.
 - Sau khi một nốt Hold kết thúc, cùng lane phải để trống ít nhất 0,5 giây. Hold vi phạm được rút ngắn hoặc đổi thành Tap, và game báo số nốt đã điều chỉnh.
 
+## Cỡ nốt, độ đậm và độ khó chấm điểm
+
+Cài đặt, tab Lối Chơi, phần Nốt:
+
+- Cỡ Nốt (80% đến 150%) và Độ Đậm Nốt (30% đến 100%) chỉ đổi cách hiển thị.
+- Độ Khó Chấm Điểm quy định cửa sổ lệch nhịp cho phép. Các mức nằm trong `JUDGE_PRESETS` ở đầu `js/engine.js`:
+
+| Mức | Perfect | Great | Thả Hold giữ hạng | Thả Hold thành Great |
+| --- | --- | --- | --- | --- |
+| Chuẩn | ±45 ms | ±90 ms | 0,10 s | 0,18 s |
+| Dễ | ±70 ms | ±130 ms | 0,15 s | 0,26 s |
+| Rất Dễ | ±90 ms | ±160 ms | 0,18 s | 0,32 s |
+
+Nốt bị tính Miss khi trễ quá cửa sổ Great của mức đang chọn. Điểm cao lưu kèm mức chấm điểm và hiển thị nhãn khi không phải Chuẩn.
+
 ## Dữ liệu lưu trên máy người chơi
 
 Cài đặt, phím, điểm cao và độ hiệu chuẩn nằm trong `localStorage`. Bài tự tải lên (file nhạc và beatmap) nằm trong IndexedDB, nên vẫn còn sau khi tải lại trang. Không có gì được gửi lên server.

@@ -8,7 +8,7 @@
    Leave them empty and the game still works; the Download Beatmaps screen
    just says that downloads are not set up. */
 window.TANT_CONFIG = {
-  supabaseUrl: "",   // example: "https://abcdefghijkl.supabase.co"
-  supabaseKey: "",   // the anon / publishable key from Project Settings > API
+  supabaseUrl: "https://usvpzxgqwqijpqwuifhe.supabase.co",   // example: "https://abcdefghijkl.supabase.co"
+  supabaseKey: "sb_publishable_QDJOdWEw_x216rspwcJBwA_DU5LcWtE",   // the anon / publishable key from Project Settings > API
   bucket: "beatmap-audio",
 };

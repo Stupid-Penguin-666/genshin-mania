@@ -24,11 +24,18 @@ const GameEngine = (() => {
   // Tunables
   // ------------------------------------------------------------------
   const HIT_LINE_RATIO = 0.85;
-  const BASE_RADIUS = 26;            // sprite design size; scaled down on narrow screens
-  const PERFECT_WINDOW_MS = 45;
-  const GREAT_WINDOW_MS = 90;
-  const HOLD_END_PERFECT_S = 0.10;   // release this close to the tail keeps the head's grade
-  const HOLD_END_GREAT_S = 0.18;     // earlier than that is a "great"; earlier still breaks the hold
+  const BASE_RADIUS = 26;            // sprite design size at 100% note size; scaled down on narrow screens
+
+  // Judging presets. perfect/great are hit windows in ms either side of the
+  // note. holdPerfect/holdGreat are how early (seconds) a Hold may be
+  // released and still keep the head's grade / count as a "great"; earlier
+  // still breaks the hold. A note becomes a MISS once it is later than the
+  // active preset's great window, so that window must stay the miss limit.
+  const JUDGE_PRESETS = {
+    standard: { perfect: 45, great: 90,  holdPerfect: 0.10, holdGreat: 0.18 },
+    easy:     { perfect: 70, great: 130, holdPerfect: 0.15, holdGreat: 0.26 },
+    veryeasy: { perfect: 90, great: 160, holdPerfect: 0.18, holdGreat: 0.32 },
+  };
   const GROUP_EPSILON_S = 0.006;     // notes closer than this count as simultaneous
   const END_PADDING_S = 1.2;
 
@@ -48,6 +55,7 @@ const GameEngine = (() => {
   let keymap = KEYMAPS[6].slice();
   let laneX = [];
   let laneGap = 100;
+  let baseRadius = BASE_RADIUS;    // BASE_RADIUS x note size setting
   let noteRadius = BASE_RADIUS;
   let hitLineY = 0;
   let renderDpr = 1;
@@ -81,6 +89,10 @@ const GameEngine = (() => {
   // Options (changeable at any time through setOptions)
   let connectorsEnabled = true;
   let lowLag = false;
+  let noteScale = 1;               // note size setting, 0.8 - 1.5
+  let noteOpacity = 1;             // note opacity setting, 0.3 - 1
+  let judgeKey = "standard";
+  let judge = JUDGE_PRESETS.standard;
 
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const glowEnabled = () => !coarsePointer && !lowLag;
@@ -148,6 +160,24 @@ const GameEngine = (() => {
       spriteCache.clear();
       if (canvas) resize();
     }
+    if (opts.noteOpacity !== undefined) {
+      const o = Number(opts.noteOpacity);
+      noteOpacity = Number.isFinite(o) ? Math.max(0.3, Math.min(1, o)) : 1;
+    }
+    if (opts.judgement !== undefined) {
+      judgeKey = JUDGE_PRESETS[opts.judgement] ? opts.judgement : "standard";
+      judge = JUDGE_PRESETS[judgeKey];
+    }
+    if (opts.noteScale !== undefined) {
+      const sc = Number(opts.noteScale);
+      const next = Number.isFinite(sc) ? Math.max(0.8, Math.min(1.5, sc)) : 1;
+      if (next !== noteScale) {
+        noteScale = next;
+        baseRadius = BASE_RADIUS * noteScale;
+        spriteCache.clear();
+        if (canvas) resize();
+      }
+    }
   }
 
   function setNoteSpeed(settingValue) {
@@ -178,7 +208,13 @@ const GameEngine = (() => {
     laneGlow = new Array(laneCount).fill(0);
     laneFlash = new Array(laneCount).fill(0);
     setNoteSpeed(opts.noteSpeed || 10);
-    setOptions({ connectors: opts.connectors !== false, lowLag: !!opts.lowLag });
+    setOptions({
+      connectors: opts.connectors !== false,
+      lowLag: !!opts.lowLag,
+      noteScale: opts.noteScale ?? 1,
+      noteOpacity: opts.noteOpacity ?? 1,
+      judgement: opts.judgement || "standard",
+    });
     applySkin(opts.skin);
 
     elCombo = document.getElementById("hud-combo-count");
@@ -222,7 +258,9 @@ const GameEngine = (() => {
     let gap = Math.max(70, Math.min(160, cw * 0.11));
     gap = Math.min(gap, (cw - 10) / laneCount);
     laneGap = gap;
-    noteRadius = Math.min(BASE_RADIUS, gap * 0.42);
+    // Enlarged notes may fill a little more of the lane so the size setting
+    // still has an effect on narrow screens; 100% and below is unchanged.
+    noteRadius = Math.min(baseRadius, gap * (noteScale > 1 ? 0.47 : 0.42));
     const startX = cw / 2 - (gap * (laneCount - 1)) / 2;
     laneX = Array.from({ length: laneCount }, (_, i) => startX + i * gap);
 
@@ -453,7 +491,7 @@ const GameEngine = (() => {
   function expireNotes(songTime) {
     // Manual backward loop + splice: filter() would allocate a new
     // array 60 times a second even when nothing expires.
-    const grace = GREAT_WINDOW_MS / 1000;
+    const grace = judge.great / 1000;
     for (let i = activeNotes.length - 1; i >= 0; i--) {
       const note = activeNotes[i];
       if (note.state === "done") { activeNotes.splice(i, 1); continue; }
@@ -534,8 +572,8 @@ const GameEngine = (() => {
 
     const songTime = eventSongTime(timeStamp);
     const early = note.time + note.duration - songTime; // > 0 means released before the tail
-    if (early <= HOLD_END_PERFECT_S) completeHold(note, note.headQuality);
-    else if (early <= HOLD_END_GREAT_S) completeHold(note, "great");
+    if (early <= judge.holdPerfect) completeHold(note, note.headQuality);
+    else if (early <= judge.holdGreat) completeHold(note, "great");
     else breakHold(note);
   }
 
@@ -557,8 +595,8 @@ const GameEngine = (() => {
 
   function qualityFromDelta(deltaMs) {
     const abs = Math.abs(deltaMs);
-    if (abs <= PERFECT_WINDOW_MS) return "perfect";
-    if (abs <= GREAT_WINDOW_MS) return "great";
+    if (abs <= judge.perfect) return "perfect";
+    if (abs <= judge.great) return "great";
     return "miss";
   }
 
@@ -622,6 +660,7 @@ const GameEngine = (() => {
       total: totalJudged,
       fullCombo: totalJudged > 0 && counts.miss === 0,
       allPerfect: totalJudged > 0 && counts.miss === 0 && counts.great === 0,
+      judgement: judgeKey,
     };
   }
 
@@ -794,6 +833,8 @@ const GameEngine = (() => {
     }
     if (!groupSpans.size) return;
     const thick = Math.max(5, noteRadius * 0.3);
+    const prevAlpha = gfx.globalAlpha;
+    gfx.globalAlpha = prevAlpha * noteOpacity;
     groupSpans.forEach((s) => {
       if (s.n < 2 || s.y > hitLineY + noteRadius) return;
       const g = gfx.createLinearGradient(0, s.y - thick / 2, 0, s.y + thick / 2);
@@ -802,6 +843,7 @@ const GameEngine = (() => {
       gfx.fillStyle = g;
       gfx.fillRect(s.min, s.y - thick / 2, s.max - s.min, thick);
     });
+    gfx.globalAlpha = prevAlpha;
   }
 
   function yForTime(noteTime, songTime) {
@@ -822,6 +864,8 @@ const GameEngine = (() => {
   }
 
   function drawHoldBar(x, topY, bottomY, state) {
+    const prevAlpha = gfx.globalAlpha;
+    gfx.globalAlpha = prevAlpha * noteOpacity;
     const half = noteRadius * 0.82;
     const base = state === "dead" ? "#8d93a3" : holdColor;
     const topAlpha = state === "hold" ? 0.4 : 0.14;
@@ -841,6 +885,7 @@ const GameEngine = (() => {
     gfx.fillStyle = edge;
     gfx.fillRect(x - half, topY, 1.6, bottomY - topY);
     gfx.fillRect(x + half - 1.6, topY, 1.6, bottomY - topY);
+    gfx.globalAlpha = prevAlpha;
   }
 
   function drawNoteHeads(note, songTime) {
@@ -869,12 +914,12 @@ const GameEngine = (() => {
       ? (active ? lightenHex(holdColor, 0.35) : holdColor)
       : (active ? noteColorActive : noteColor);
     const glow = glowEnabled();
-    const key = `${noteRendererId}|${variant}|${active}|${glow}|${renderDpr}|${color}|${noteCenterColor}`;
+    const key = `${noteRendererId}|${variant}|${active}|${glow}|${renderDpr}|${baseRadius}|${color}|${noteCenterColor}`;
     let sprite = spriteCache.get(key);
     if (sprite) return sprite;
 
     const pad = glow ? 18 : 6;
-    const size = Math.ceil(BASE_RADIUS * 2 + pad * 2);
+    const size = Math.ceil(baseRadius * 2 + pad * 2);
     sprite = document.createElement("canvas");
     sprite.width = size * renderDpr;
     sprite.height = size * renderDpr;
@@ -886,7 +931,7 @@ const GameEngine = (() => {
     if (noteRenderer && typeof noteRenderer.draw === "function") {
       try {
         noteRenderer.draw(sgfx, {
-          radius: BASE_RADIUS, color, centerColor: noteCenterColor,
+          radius: baseRadius, color, centerColor: noteCenterColor,
           useGlow: glow, variant, active,
         });
       } catch (err) {
@@ -905,15 +950,18 @@ const GameEngine = (() => {
     if (glow) { sgfx.shadowColor = color; sgfx.shadowBlur = 10; }
     sgfx.fillStyle = color;
     sgfx.beginPath();
-    sgfx.arc(0, 0, BASE_RADIUS * 0.8, 0, Math.PI * 2);
+    sgfx.arc(0, 0, baseRadius * 0.8, 0, Math.PI * 2);
     sgfx.fill();
   }
 
   function drawNoteSprite(x, y, variant, active) {
     if (y < -noteRadius * 3 || y > canvas.clientHeight + noteRadius * 3) return;
     const sprite = getNoteSprite(variant, active);
-    const size = sprite.logicalSize * (noteRadius / BASE_RADIUS);
+    const size = sprite.logicalSize * (noteRadius / baseRadius);
+    const prevAlpha = gfx.globalAlpha;
+    gfx.globalAlpha = prevAlpha * noteOpacity;
     gfx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
+    gfx.globalAlpha = prevAlpha;
   }
 
   function drawEffects() {
@@ -945,6 +993,7 @@ const GameEngine = (() => {
     handleKeyDown, handleKeyUp, handleLaneDown, handleLaneUp, releaseAll,
     hasKey: (code) => keymap.includes(code),
     setLoopRegion, setAutoplay,
+    JUDGE_PRESETS,
   };
 })();
 

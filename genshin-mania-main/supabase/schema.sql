@@ -20,7 +20,7 @@ returns boolean
 language sql
 stable
 as $$
-  select auth.uid() = 'OWNER_USER_ID'::uuid
+  select auth.uid() = '71a0f2c6-c353-4bbe-a0fb-7199585d26fd'::uuid
 $$;
 
 -- ---------------------------------------------------------------------------

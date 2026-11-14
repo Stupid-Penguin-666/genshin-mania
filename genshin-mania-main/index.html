@@ -277,12 +277,31 @@
                   <option value="8" data-i18n="set.keysN8">8 keys</option>
                 </select>
               </label>
+              <div class="row row--slider">
+                <span data-i18n="set.noteSize">Note Size</span>
+                <span class="slider"><input type="range" id="setting-note-size" min="80" max="150" step="5" data-i18n-attr="aria-label:set.noteSize" aria-label="Note size"></span>
+                <output class="value-box" id="out-note-size">100%</output>
+              </div>
+              <div class="row row--slider">
+                <span data-i18n="set.noteOpacity">Note Opacity</span>
+                <span class="slider"><input type="range" id="setting-note-opacity" min="30" max="100" step="5" data-i18n-attr="aria-label:set.noteOpacity" aria-label="Note opacity"></span>
+                <output class="value-box" id="out-note-opacity">100%</output>
+              </div>
+              <label class="row row--select">
+                <span data-i18n="set.judging">Judging</span>
+                <select class="select" id="setting-judgement" data-i18n-attr="aria-label:set.judging" aria-label="Judging">
+                  <option value="standard" data-i18n="set.judgeOpt.standard">Standard (±45 / ±90 ms)</option>
+                  <option value="easy" data-i18n="set.judgeOpt.easy">Easy (±70 / ±130 ms)</option>
+                  <option value="veryeasy" data-i18n="set.judgeOpt.veryeasy">Very Easy (±90 / ±160 ms)</option>
+                </select>
+              </label>
               <label class="row row--toggle">
                 <span data-i18n="set.connectors">Connect Simultaneous Notes</span>
                 <span class="toggle"><input type="checkbox" id="setting-connectors"><span class="toggle__track"></span><span class="toggle__knob"><svg class="ic"><use href="#i-check"/></svg></span></span>
               </label>
             </div>
             <p class="hint" data-i18n="set.notesHint">Speed only changes how notes fall on screen, not how hard the judging is. Each song plays in the number of keys it was made for. Default Keys is used for new songs and the editor. Connecting notes draws a bar between notes that fall at the same moment.</p>
+            <p class="hint" data-i18n="set.judgeHint">Size and opacity only change how notes look; they do not change the judging.</p>
 
             <h3 class="section-title" data-i18n="set.calibration">Calibration</h3>
             <div class="row-list">

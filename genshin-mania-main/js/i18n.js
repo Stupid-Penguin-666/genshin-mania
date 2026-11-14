@@ -191,6 +191,7 @@ const I18n = (() => {
       "result.retry": "Retry",
       "result.newBest": "New record",
       "result.noRecord": "Not counted for records",
+      "result.judging": "Judging: {mode}",
 
       "set.groups": "Settings groups",
       "set.close": "Close Settings",
@@ -210,6 +211,16 @@ const I18n = (() => {
       "set.keysN6": "6 keys",
       "set.keysN8": "8 keys",
       "set.connectors": "Connect Simultaneous Notes",
+      "set.noteSize": "Note Size",
+      "set.noteOpacity": "Note Opacity",
+      "set.judging": "Judging",
+      "set.judge.standard": "Standard",
+      "set.judge.easy": "Easy",
+      "set.judge.veryeasy": "Very Easy",
+      "set.judgeOpt.standard": "Standard (±45 / ±90 ms)",
+      "set.judgeOpt.easy": "Easy (±70 / ±130 ms)",
+      "set.judgeOpt.veryeasy": "Very Easy (±90 / ±160 ms)",
+      "set.judgeHint": "Size and opacity only change how notes look; they do not change the judging. Judging sets how far off the beat a press can be for PERFECT and GREAT (first and second number), and how late a Hold may be released. Easier modes are marked next to your best score.",
       "set.notesHint": "Speed only changes how notes fall on screen, not how hard the judging is. Each song plays in the number of keys it was made for. Default Keys is used for new songs and the editor. Connecting notes draws a bar between notes that fall at the same moment.",
       "set.calibration": "Calibration",
       "set.offset": "Audio Offset (ms)",
@@ -280,7 +291,7 @@ const I18n = (() => {
       "ed.testTitle": "Test Play: {title}",
 
       "help.play.t": "How To Play",
-      "help.play.b": "<p>Notes fall down the lanes. When a note reaches the circle at the bottom, press the key for that lane.</p><ul><li><strong>Tap</strong>: press as the note reaches the line.</li><li><strong>Hold</strong>: a note with a long tail. Press when the head reaches the line, keep the key down, and let go as the tail reaches the line. Holding past the tail also counts. Letting go too early loses the note. After a hold ends, its lane stays empty for half a second so you have time to press again.</li><li><strong>Connected notes</strong>: notes that fall together are joined by a bar. Press them at the same time.</li><li><strong>PERFECT</strong> is within 45 ms. <strong>GREAT</strong> is within 90 ms. Anything else is a <strong>MISS</strong>.</li><li><strong>COMBO</strong> counts notes in a row without a miss. You never fail a song. Finish it to earn rank S, A, B or C by accuracy.</li></ul>",
+      "help.play.b": "<p>Notes fall down the lanes. When a note reaches the circle at the bottom, press the key for that lane.</p><ul><li><strong>Tap</strong>: press as the note reaches the line.</li><li><strong>Hold</strong>: a note with a long tail. Press when the head reaches the line, keep the key down, and let go as the tail reaches the line. Holding past the tail also counts. Letting go too early loses the note. After a hold ends, its lane stays empty for half a second so you have time to press again.</li><li><strong>Connected notes</strong>: notes that fall together are joined by a bar. Press them at the same time.</li><li><strong>PERFECT</strong> is within {perfect} ms. <strong>GREAT</strong> is within {great} ms. Anything else is a <strong>MISS</strong>. These windows follow the Judging setting in Settings, under Gameplay.</li><li><strong>COMBO</strong> counts notes in a row without a miss. You never fail a song. Finish it to earn rank S, A, B or C by accuracy.</li></ul>",
       "help.songs.t": "Songs And Uploads",
       "help.songs.b": "<p>Press Add Song to bring in music. The file is kept in your browser, is never sent anywhere, and is still there after you reload the page.</p><ul><li>With a beatmap (.json), the song plays exactly that chart.</li><li>With audio only, choose how to generate notes and how many keys to use (4, 6 or 8). <strong>Beat Grid</strong> spreads notes along the BPM. <strong>Audio Analysis</strong> scans the waveform and puts notes on prominent moments.</li><li>Sensitivity, Snap, minimum gap and max notes per second only apply to Audio Analysis. If it finds nothing, the game falls back to Beat Grid.</li><li>Every song plays in the number of keys it was made for, using the keys you bound for that layout. Only 4, 6 and 8 keys are supported.</li></ul>",
       "help.cloud.t": "Download Beatmaps",
@@ -476,6 +487,7 @@ const I18n = (() => {
       "result.retry": "Chơi Lại",
       "result.newBest": "Kỷ lục mới",
       "result.noRecord": "Không tính kỷ lục",
+      "result.judging": "Chấm điểm: {mode}",
 
       "set.groups": "Nhóm cài đặt",
       "set.close": "Đóng Cài Đặt",
@@ -495,6 +507,16 @@ const I18n = (() => {
       "set.keysN6": "6 phím",
       "set.keysN8": "8 phím",
       "set.connectors": "Nối Nốt Ngang",
+      "set.noteSize": "Cỡ Nốt",
+      "set.noteOpacity": "Độ Đậm Nốt",
+      "set.judging": "Độ Khó Chấm Điểm",
+      "set.judge.standard": "Chuẩn",
+      "set.judge.easy": "Dễ",
+      "set.judge.veryeasy": "Rất Dễ",
+      "set.judgeOpt.standard": "Chuẩn (±45 / ±90 ms)",
+      "set.judgeOpt.easy": "Dễ (±70 / ±130 ms)",
+      "set.judgeOpt.veryeasy": "Rất Dễ (±90 / ±160 ms)",
+      "set.judgeHint": "Cỡ nốt và độ đậm chỉ đổi cách nốt hiển thị, không đổi cách chấm điểm. Độ khó chấm điểm quyết định bạn được lệch nhịp tối đa bao nhiêu để được PERFECT và GREAT (số thứ nhất và thứ hai), cũng như được thả Hold sớm bao nhiêu. Mức dễ hơn Chuẩn được ghi chú cạnh điểm cao.",
       "set.notesHint": "Tốc độ chỉ đổi cách nốt rơi trên màn hình, không đổi độ khó chấm điểm. Mỗi bài chơi theo đúng số phím nó được tạo. Số phím mặc định dùng cho bài mới và trình soạn nhạc. Nối nốt ngang vẽ một thanh nối giữa các nốt rơi cùng lúc.",
       "set.calibration": "Hiệu Chuẩn",
       "set.offset": "Độ Hiệu Chuẩn (ms)",
@@ -565,7 +587,7 @@ const I18n = (() => {
       "ed.testTitle": "Test Play: {title}",
 
       "help.play.t": "Cách Chơi",
-      "help.play.b": "<p>Nốt rơi từ trên xuống theo từng lane. Khi nốt chạm vòng tròn dưới cùng, nhấn phím của lane đó.</p><ul><li><strong>Tap</strong>: nhấn đúng lúc nốt chạm vạch.</li><li><strong>Hold</strong>: nốt có đuôi dài. Nhấn khi đầu nốt chạm vạch, giữ phím, rồi thả khi đuôi chạm vạch. Giữ qua đuôi cũng được tính hoàn thành. Thả quá sớm thì mất nốt đó. Sau khi Hold kết thúc, lane đó để trống nửa giây để bạn kịp bấm lại.</li><li><strong>Nối ngang</strong>: các nốt rơi cùng lúc được nối bằng một thanh ngang. Nhấn tất cả cùng lúc.</li><li><strong>PERFECT</strong> lệch trong 45ms. <strong>GREAT</strong> lệch trong 90ms. Ngoài đó là <strong>MISS</strong>.</li><li><strong>COMBO</strong> là số nốt liên tiếp không Miss. Bạn không bao giờ thua giữa chừng. Chơi hết bài để nhận hạng S, A, B hoặc C theo độ chính xác.</li></ul>",
+      "help.play.b": "<p>Nốt rơi từ trên xuống theo từng lane. Khi nốt chạm vòng tròn dưới cùng, nhấn phím của lane đó.</p><ul><li><strong>Tap</strong>: nhấn đúng lúc nốt chạm vạch.</li><li><strong>Hold</strong>: nốt có đuôi dài. Nhấn khi đầu nốt chạm vạch, giữ phím, rồi thả khi đuôi chạm vạch. Giữ qua đuôi cũng được tính hoàn thành. Thả quá sớm thì mất nốt đó. Sau khi Hold kết thúc, lane đó để trống nửa giây để bạn kịp bấm lại.</li><li><strong>Nối ngang</strong>: các nốt rơi cùng lúc được nối bằng một thanh ngang. Nhấn tất cả cùng lúc.</li><li><strong>PERFECT</strong> lệch trong {perfect}ms. <strong>GREAT</strong> lệch trong {great}ms. Ngoài đó là <strong>MISS</strong>. Các mốc này đổi theo mục Độ Khó Chấm Điểm trong Cài Đặt, phần Lối Chơi.</li><li><strong>COMBO</strong> là số nốt liên tiếp không Miss. Bạn không bao giờ thua giữa chừng. Chơi hết bài để nhận hạng S, A, B hoặc C theo độ chính xác.</li></ul>",
       "help.songs.t": "Chọn Bài Và Thêm Bài",
       "help.songs.b": "<p>Bấm Thêm Bài để tải nhạc. File được lưu ngay trong trình duyệt của bạn, không gửi đi đâu và vẫn còn sau khi tải lại trang.</p><ul><li>Có beatmap (.json): chơi đúng theo chart đó.</li><li>Chỉ có nhạc: chọn cách tạo nốt và số phím (4, 6 hoặc 8). <strong>Beat Grid</strong> rải nốt theo lưới BPM. <strong>Audio Analysis</strong> quét waveform để đặt nốt vào những điểm nhạc nổi bật.</li><li>Độ nhạy, Snap, khoảng cách tối thiểu và số nốt tối đa mỗi giây chỉ có ở Audio Analysis. Nếu không tìm được điểm nhạc nào, game tự chuyển sang Beat Grid.</li><li>Mỗi bài chơi theo đúng số phím nó được tạo, dùng bộ phím bạn đã gán cho bố cục đó. Chỉ hỗ trợ 4, 6 và 8 phím.</li></ul>",
       "help.cloud.t": "Tải Beatmap",
@@ -586,13 +608,21 @@ const I18n = (() => {
   };
 
   let lang = "en";
+  // Values every string may use, such as the live hit windows. Set from
+  // outside with setVars; a per-call vars object wins over these.
+  let globalVars = {};
 
   const interpolate = (text, vars) =>
-    vars ? text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : text;
+    text.replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? vars[k] : k in globalVars ? globalVars[k] : m));
 
   function translate(key, vars) {
     const text = (DICT[lang] && DICT[lang][key]) ?? DICT.en[key] ?? key;
     return interpolate(text, vars);
+  }
+
+  function setVars(next) {
+    globalVars = { ...globalVars, ...next };
+    apply();
   }
 
   // Walks the page once and fills every marked element.
@@ -618,6 +648,7 @@ const I18n = (() => {
     t: translate,
     apply,
     setLang,
+    setVars,
     getLang: () => lang,
     locale: () => (lang === "vi" ? "vi-VN" : "en-US"),
     dictionaries: DICT,

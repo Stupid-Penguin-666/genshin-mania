@@ -1,0 +1,10 @@
+/* Amethyst: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #b57bff;
+  --accent-hi: #e3ccff;
+  --accent-lo: #6f3fc0;
+  --accent-ink: #26123f;
+  --stage-top: #150d2a;
+  --stage-mid: #2d1b55;
+  --stage-bottom: #8a4fd6;
+}

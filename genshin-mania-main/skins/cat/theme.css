@@ -1,0 +1,10 @@
+/* Cat: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #ff9bb0;
+  --accent-hi: #ffd1dc;
+  --accent-lo: #c64a73;
+  --accent-ink: #40111f;
+  --stage-top: #222a55;
+  --stage-mid: #4a2f66;
+  --stage-bottom: #e5667a;
+}

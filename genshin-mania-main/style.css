@@ -102,6 +102,8 @@ html, body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  /* Set from Settings > Appearance > Background Brightness (1 = as is). */
+  filter: brightness(var(--bg-bright, 1));
 }
 
 #app {
@@ -124,13 +126,20 @@ html, body {
 @keyframes screen-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* With a background picture the screens become a neutral dark wash, so the
-   picture shows through whatever its colours are. */
-.has-bg-image .screen { background: rgba(8, 12, 22, 0.72); }
+   picture shows through whatever its colours are.
+   --bg-wash scales the wash: 1 normally, lower when the player brightens the picture. */
+.has-bg-image .screen { background: rgba(8, 12, 22, calc(0.72 * var(--bg-wash, 1))); }
 .has-bg-image #screen-mainmenu {
-  background: linear-gradient(90deg, rgba(8, 12, 22, 0.86) 0%, rgba(8, 12, 22, 0.46) 48%, rgba(8, 12, 22, 0.1) 100%);
+  background: linear-gradient(90deg,
+    rgba(8, 12, 22, calc(0.86 * var(--bg-wash, 1))) 0%,
+    rgba(8, 12, 22, calc(0.46 * var(--bg-wash, 1))) 48%,
+    rgba(8, 12, 22, calc(0.1 * var(--bg-wash, 1))) 100%);
 }
 .has-bg-image #screen-gameplay {
-  background: linear-gradient(180deg, rgba(8, 12, 22, 0.6) 0%, rgba(8, 12, 22, 0.34) 55%, rgba(8, 12, 22, 0.6) 100%);
+  background: linear-gradient(180deg,
+    rgba(8, 12, 22, calc(0.6 * var(--bg-wash, 1))) 0%,
+    rgba(8, 12, 22, calc(0.34 * var(--bg-wash, 1))) 55%,
+    rgba(8, 12, 22, calc(0.6 * var(--bg-wash, 1))) 100%);
 }
 #screen-gameplay {
   background: linear-gradient(180deg, var(--stage-top) 0%, var(--stage-mid) 62%, var(--stage-bottom) 100%);

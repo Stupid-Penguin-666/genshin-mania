@@ -1,0 +1,10 @@
+/* Chibi: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #b9a3ff;
+  --accent-hi: #e6dcff;
+  --accent-lo: #6a52c8;
+  --accent-ink: #1f1450;
+  --stage-top: #191136;
+  --stage-mid: #4c3b91;
+  --stage-bottom: #abb3f4;
+}

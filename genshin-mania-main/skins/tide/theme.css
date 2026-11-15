@@ -1,0 +1,10 @@
+/* Tide: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #4cb0ff;
+  --accent-hi: #bfe2ff;
+  --accent-lo: #1c66c4;
+  --accent-ink: #08204a;
+  --stage-top: #111a41;
+  --stage-mid: #194c8f;
+  --stage-bottom: #26b7ff;
+}

@@ -1,0 +1,10 @@
+/* Shield: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #5fd6d0;
+  --accent-hi: #c4f5f0;
+  --accent-lo: #2a8f98;
+  --accent-ink: #06303a;
+  --stage-top: #042033;
+  --stage-mid: #1c5d71;
+  --stage-bottom: #3caab8;
+}

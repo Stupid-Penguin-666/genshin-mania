@@ -1,0 +1,10 @@
+/* Whirl: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #a7b3ff;
+  --accent-hi: #dfe4ff;
+  --accent-lo: #5a6ad0;
+  --accent-ink: #101a50;
+  --stage-top: #080f36;
+  --stage-mid: #3a4d93;
+  --stage-bottom: #a6bbff;
+}

@@ -1,0 +1,10 @@
+/* Pudding: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #9ab4ff;
+  --accent-hi: #d9e4ff;
+  --accent-lo: #5466c8;
+  --accent-ink: #161f52;
+  --stage-top: #3b305f;
+  --stage-mid: #474f8f;
+  --stage-bottom: #71a1f5;
+}

@@ -1,0 +1,10 @@
+/* Sakura: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #f2a6d2;
+  --accent-hi: #ffd8ee;
+  --accent-lo: #b95f98;
+  --accent-ink: #3f1630;
+  --stage-top: #2b325b;
+  --stage-mid: #415484;
+  --stage-bottom: #a8c2cc;
+}

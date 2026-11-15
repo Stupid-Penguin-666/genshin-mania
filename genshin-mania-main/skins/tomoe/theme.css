@@ -1,0 +1,10 @@
+/* Tomoe: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #c18cf6;
+  --accent-hi: #ecd6ff;
+  --accent-lo: #7a44c4;
+  --accent-ink: #25124c;
+  --stage-top: #1b2254;
+  --stage-mid: #4a3491;
+  --stage-bottom: #a463d8;
+}

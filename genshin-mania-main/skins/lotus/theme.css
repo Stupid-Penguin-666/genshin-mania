@@ -1,0 +1,10 @@
+/* Lotus: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #7fb0ff;
+  --accent-hi: #d6e5ff;
+  --accent-lo: #3a63d6;
+  --accent-ink: #0b1748;
+  --stage-top: #080e50;
+  --stage-mid: #2f4fab;
+  --stage-bottom: #7fbdff;
+}

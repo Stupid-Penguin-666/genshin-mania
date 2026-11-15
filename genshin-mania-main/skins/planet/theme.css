@@ -1,0 +1,10 @@
+/* Planet: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #7aa2ff;
+  --accent-hi: #d2e0ff;
+  --accent-lo: #4a54c4;
+  --accent-ink: #14184c;
+  --stage-top: #372e5a;
+  --stage-mid: #484289;
+  --stage-bottom: #5e7ceb;
+}

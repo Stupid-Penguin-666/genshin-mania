@@ -1,0 +1,10 @@
+/* Heart Bloom: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #d68af8;
+  --accent-hi: #f3d1ff;
+  --accent-lo: #8f3fc0;
+  --accent-ink: #36104a;
+  --stage-top: #1f161a;
+  --stage-mid: #542e58;
+  --stage-bottom: #ad5597;
+}

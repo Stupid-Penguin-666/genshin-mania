@@ -1,0 +1,10 @@
+/* Sunburst: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #ffa346;
+  --accent-hi: #ffd9a4;
+  --accent-lo: #d2542c;
+  --accent-ink: #3d1608;
+  --stage-top: #1b1631;
+  --stage-mid: #71333a;
+  --stage-bottom: #ff8460;
+}

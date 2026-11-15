@@ -1,0 +1,10 @@
+/* Trefoil: UI accent and gameplay backdrop. Loaded only while this skin is selected. */
+:root {
+  --accent: #5fe0d4;
+  --accent-hi: #c4faf2;
+  --accent-lo: #2a9a9a;
+  --accent-ink: #06323a;
+  --stage-top: #16294a;
+  --stage-mid: #227083;
+  --stage-bottom: #5ce8db;
+}

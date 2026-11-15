@@ -1,0 +1,62 @@
+[
+  {
+    "id": "Hutao",
+    "name": "Hutao",
+    "rendererFile": "skins/Hutao/note-renderer.js",
+    "noteColor": "#ffb04a",
+    "noteColorActive": "#fff0c4",
+    "noteCenterColor": "#fff1a8",
+    "holdColor": "#ff7468",
+    "particleColor": "#ffd76b",
+    "cssFile": null,
+    "default": true
+  },
+  {
+    "id": "Columbina",
+    "name": "Columbina",
+    "rendererFile": "skins/Columbina/note-renderer.js",
+    "noteColor": "#5b8cff",
+    "noteColorActive": "#a9c4ff",
+    "noteCenterColor": "#e8f2ff",
+    "holdColor": "#b99cff",
+    "particleColor": "#dff8ff",
+    "cssFile": "skins/Columbina/theme.css",
+    "default": false
+  },
+  {
+    "id": "ocean",
+    "name": "Ocean",
+    "rendererFile": "skins/ocean/note-renderer.js",
+    "noteColor": "#9fd4f2",
+    "noteColorActive": "#e0f4ff",
+    "noteCenterColor": "#f0fbff",
+    "holdColor": "#47d59a",
+    "particleColor": "#8fe3ff",
+    "cssFile": "skins/ocean/theme.css",
+    "default": false
+  },
+  {
+    "id": "amethyst",
+    "name": "Amethyst",
+    "rendererFile": "skins/amethyst/note-renderer.js",
+    "noteColor": "#b57bff",
+    "noteColorActive": "#e6d2ff",
+    "noteCenterColor": "#f5ecff",
+    "holdColor": "#ff7ac8",
+    "particleColor": "#d9b3ff",
+    "cssFile": "skins/amethyst/theme.css",
+    "default": false
+  },
+  {
+    "id": "cat",
+    "name": "Cat",
+    "rendererFile": "skins/cat/note-renderer.js",
+    "noteColor": "#ffc15a",
+    "noteColorActive": "#fff0b8",
+    "noteCenterColor": "#fffbe8",
+    "holdColor": "#e86cc0",
+    "particleColor": "#ffb3e6",
+    "cssFile": "skins/cat/theme.css",
+    "default": false
+  }
+]

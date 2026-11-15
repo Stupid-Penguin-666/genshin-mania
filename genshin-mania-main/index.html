@@ -368,6 +368,13 @@
             <h3 class="section-title" data-i18n="set.background">Background</h3>
             <div class="thumb-grid" id="bg-picker-grid"></div>
             <p class="hint" id="bg-picker-empty-hint" hidden data-i18n="set.bgEmpty">No backgrounds yet. Add pictures to the images folder and list them in images/catalog.json.</p>
+            <div class="row-list">
+              <div class="row row--slider">
+                <span data-i18n="set.bgBright">Background Brightness</span>
+                <span class="slider"><input type="range" id="setting-bg-brightness" min="30" max="150" step="5" data-i18n-attr="aria-label:set.bgBright" aria-label="Background brightness"></span>
+                <output class="value-box" id="out-bg-brightness">100%</output>
+              </div>
+            </div>
             <h3 class="section-title" data-i18n="set.skin">Note Skin</h3>
             <div class="skin-grid" id="skin-picker-grid"></div>
           </div>

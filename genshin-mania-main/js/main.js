@@ -50,6 +50,7 @@
     lowLag: false,
     noteSize: 100,        // percent, 80 - 150
     noteOpacity: 100,     // percent, 30 - 100
+    bgBrightness: 100,    // percent, 30 - 150, background picture
     judgement: "standard", // standard | easy | veryeasy
   };
 
@@ -59,6 +60,15 @@
     selectedSongId: null,
   };
 
+  // Below 100% the picture is darkened. Above 100% it is brightened and the
+  // dark wash the screens put over it is thinned out so the change shows.
+  function applyBgBrightness() {
+    const v = state.settings.bgBrightness / 100;
+    const root = document.documentElement.style;
+    root.setProperty("--bg-bright", String(v));
+    root.setProperty("--bg-wash", String(v > 1 ? Math.max(0.45, 1 - (v - 1)) : 1));
+  }
+
   function loadState() {
     const saved = readJson(KEY.settings, null);
     if (saved && typeof saved === "object") state.settings = { ...DEFAULT_SETTINGS, ...saved };
@@ -66,6 +76,8 @@
     const clampNum = (v, lo, hi, dflt) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, Math.round(+v))) : dflt);
     state.settings.noteSize = clampNum(state.settings.noteSize, 80, 150, 100);
     state.settings.noteOpacity = clampNum(state.settings.noteOpacity, 30, 100, 100);
+    state.settings.bgBrightness = clampNum(state.settings.bgBrightness, 30, 150, 100);
+    applyBgBrightness();
     if (!GameEngine.JUDGE_PRESETS[state.settings.judgement]) state.settings.judgement = "standard";
     const lib = readJson(KEY.library, []);
     state.library = Array.isArray(lib) ? lib.filter((s) => s && s.id && s.title) : [];
@@ -962,6 +974,8 @@
   }
   bindPercentSlider("setting-note-size", "out-note-size", "noteSize");
   bindPercentSlider("setting-note-opacity", "out-note-opacity", "noteOpacity");
+  bindPercentSlider("setting-bg-brightness", "out-bg-brightness", "bgBrightness");
+  $("setting-bg-brightness").addEventListener("input", applyBgBrightness);
 
   // The help text quotes the live hit windows, so keep it in step.
   function syncJudgeVars() {
@@ -1005,6 +1019,9 @@
     $("setting-note-opacity").value = s.noteOpacity;
     $("out-note-opacity").textContent = `${s.noteOpacity}%`;
     paintSlider($("setting-note-opacity"));
+    $("setting-bg-brightness").value = s.bgBrightness;
+    $("out-bg-brightness").textContent = `${s.bgBrightness}%`;
+    paintSlider($("setting-bg-brightness"));
     $("setting-judgement").value = s.judgement;
     syncJudgeVars();
     $("setting-connectors").checked = s.connectors;

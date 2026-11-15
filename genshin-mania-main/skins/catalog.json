@@ -85,7 +85,7 @@
   },
   {
     "id": "heartbloom",
-    "name": "Heart Bloom",
+    "name": "Durin",
     "rendererFile": "skins/heartbloom/note-renderer.js",
     "noteColor": "#c47cf5",
     "noteColorActive": "#e8c4ff",
@@ -97,7 +97,7 @@
   },
   {
     "id": "chibi",
-    "name": "Chibi",
+    "name": "Citlali",
     "rendererFile": "skins/chibi/note-renderer.js",
     "noteColor": "#e5b8f8",
     "noteColorActive": "#f6dcff",
@@ -109,7 +109,7 @@
   },
   {
     "id": "whirl",
-    "name": "Whirl",
+    "name": "Sky Moon",
     "rendererFile": "skins/whirl/note-renderer.js",
     "noteColor": "#a4aaf0",
     "noteColorActive": "#d6d9ff",
@@ -133,7 +133,7 @@
   },
   {
     "id": "pyro",
-    "name": "Sunburst",
+    "name": "Pyro",
     "rendererFile": "skins/pyro/note-renderer.js",
     "noteColor": "#ffa62e",
     "noteColorActive": "#ffd98a",
@@ -145,7 +145,7 @@
   },
   {
     "id": "trefoil",
-    "name": "Trefoil",
+    "name": "Favonius",
     "rendererFile": "skins/trefoil/note-renderer.js",
     "noteColor": "#d6ee86",
     "noteColorActive": "#faffc2",
@@ -157,7 +157,7 @@
   },
   {
     "id": "tide",
-    "name": "Tide",
+    "name": "Hydro",
     "rendererFile": "skins/tide/note-renderer.js",
     "noteColor": "#4fd6ee",
     "noteColorActive": "#a8f0ff",
@@ -181,7 +181,7 @@
   },
   {
     "id": "planet",
-    "name": "Planet",
+    "name": "Skirk",
     "rendererFile": "skins/planet/note-renderer.js",
     "noteColor": "#4ad8e4",
     "noteColorActive": "#a8fcff",

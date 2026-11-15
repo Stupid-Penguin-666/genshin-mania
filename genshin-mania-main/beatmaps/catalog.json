@@ -1,12 +1,12 @@
 [
   {
-    "id": "builtin_serenity",
-    "title": "Serenity",
-    "artist": "Demo",
-    "bpm": 96,
-    "difficulty": "easy",
+    "id": "drstone_haruka",
+    "title": "Haruka",
+    "artist": "Ryujin Kiyoshi",
+    "bpm": 124,
+    "difficulty": "normal",
     "laneCount": 6,
-    "audioUrl": "audio/demo-1-serenity.wav",
-    "beatmapUrl": "beatmaps/demo-1-serenity.json"
+    "audioUrl": "audio/haruka.mp3",
+    "beatmapUrl": "beatmaps/haruka.json"
   }
 ]
